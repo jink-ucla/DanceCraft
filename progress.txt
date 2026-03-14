@@ -8,6 +8,7 @@
 - Pose estimation module lives in `src/pose/` with barrel export via `index.ts`
 - TF.js MoveNet uses `@tensorflow-models/pose-detection` — must externalize `@mediapipe/pose` in Vite build config (unused with MoveNet)
 - React components go in `src/components/`
+- Python pipeline lives in `scripts/` with own `requirements.txt`; tests via `python scripts/test_schema.py`
 
 ---
 
@@ -45,4 +46,17 @@
   - WebRTC getUserMedia errors: NotAllowedError (denied), NotFoundError (no camera) — handle both distinctly
   - Canvas overlay must match video dimensions and use `pointer-events: none` to not block video interactions
   - Mirror mode (scaleX(-1)) applied to both video and canvas for natural selfie-view
+---
+
+## 2026-03-14 - US-003
+- Created offline pose extraction pipeline: yt-dlp download + MoveNet + JSON output
+- Created JSON schema validation test suite (5 tests)
+- Documented pipeline setup and usage in scripts/README.md
+- Files changed: scripts/extract_poses.py, scripts/test_schema.py, scripts/requirements.txt, scripts/README.md
+- **Learnings for future iterations:**
+  - Python pipeline lives in `scripts/` with its own requirements.txt
+  - MoveNet Lightning needs 192x192 input — use `tf.image.resize_with_pad` to maintain aspect ratio
+  - MoveNet output is in [y, x, score] order (not x, y) — swap when converting
+  - yt-dlp `--match-filter` can enforce max duration at download time
+  - Schema test validates: field presence, types, ranges, keypoint count (17), timestamp ordering
 ---
