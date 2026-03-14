@@ -4,7 +4,10 @@ import type { DanceInfo } from './components/HomeScreen'
 import { DanceMode } from './components/DanceMode'
 import { ResultsScreen } from './components/ResultsScreen'
 import { Settings } from './components/Settings'
+import { History } from './components/History'
 import { computePostDanceScore } from './scoring/dtw'
+import { computeRank } from './scoring/dtw'
+import { saveScore } from './storage/scores'
 import type { DTWResult, TimestampedPose } from './scoring/dtw'
 import type { Pose } from './scoring/types'
 import './App.css'
@@ -23,6 +26,7 @@ type View =
   | { screen: 'dance'; dance: DanceInfo }
   | { screen: 'results'; dance: DanceInfo; result: DTWResult }
   | { screen: 'settings' }
+  | { screen: 'history' }
 
 function App() {
   const [view, setView] = useState<View>({ screen: 'home' })
@@ -37,13 +41,16 @@ function App() {
       userPosesRef.current,
     )
 
-    const key = `groovy_best_${view.dance.id}`
-    const prev = localStorage.getItem(key)
-    const prevScore = prev ? JSON.parse(prev) : 0
-    const finalScore = result.overallScore * 100
-    if (finalScore > prevScore) {
-      localStorage.setItem(key, JSON.stringify(finalScore))
-    }
+    const scorePct = result.overallScore * 100
+
+    // Save to score history
+    saveScore({
+      danceId: view.dance.id,
+      danceName: view.dance.title,
+      score: scorePct,
+      rank: computeRank(result.overallScore),
+      date: new Date().toISOString(),
+    })
 
     setView({ screen: 'results', dance: view.dance, result })
   }, [view])
@@ -51,6 +58,14 @@ function App() {
   const handleRecordPose = useCallback((pose: Pose, time: number) => {
     userPosesRef.current.push({ time, pose })
   }, [])
+
+  if (view.screen === 'history') {
+    return (
+      <div className="app">
+        <History onBack={() => setView({ screen: 'home' })} />
+      </div>
+    )
+  }
 
   if (view.screen === 'settings') {
     return (
@@ -106,6 +121,7 @@ function App() {
           setView({ screen: 'dance', dance })
         }}
         onSettings={() => setView({ screen: 'settings' })}
+        onHistory={() => setView({ screen: 'history' })}
       />
     </div>
   )

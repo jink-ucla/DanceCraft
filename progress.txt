@@ -140,3 +140,16 @@
   - `loadSettings()` and `saveSettings()` exported from Settings.tsx for use by other components
   - Camera enumeration requires getUserMedia call first to get labeled device names
 ---
+
+## 2026-03-14 - US-011
+- Created score storage module (src/storage/scores.ts) with saveScore, getHistory, getPersonalBest
+- Created History component showing recent attempts with date, score, rank
+- Added History navigation from home screen
+- Integrated score saving into post-dance flow via App.tsx
+- Files changed: src/storage/scores.ts, src/components/History.tsx, src/components/HomeScreen.tsx, src/App.tsx, src/App.css, tests/unit/storage/scores.test.ts
+- 9 new unit tests for score storage (save, retrieve, personal best, filtering, limits)
+- **Learnings for future iterations:**
+  - Score history stored as JSON array under `groovy_score_history` localStorage key
+  - Personal bests stored separately as `groovy_best_{danceId}` for quick lookup
+  - History capped at 100 entries — oldest removed on overflow
+---
