@@ -3,6 +3,8 @@
 - Unit tests go in `tests/unit/`, e2e tests in `tests/e2e/`
 - Playwright uses chromium only, dev server auto-started via `webServer` config
 - TypeScript strict mode enabled in `tsconfig.app.json`
+- Scoring library lives in `src/scoring/` with barrel export via `index.ts`
+- Test fixtures for poses go in `tests/unit/scoring/fixtures.ts` — use `makePose()` helper for partial keypoint data
 
 ---
 
@@ -15,4 +17,15 @@
   - Vite scaffolder won't run in non-empty directories — scaffold in /tmp and copy over
   - Must exclude `tests/e2e/**` from Vitest or Playwright's `test()` conflicts with Vitest
   - Playwright needs `npx playwright install chromium` after npm install
+---
+
+## 2026-03-14 - US-004
+- Implemented joint angle extraction and pose comparison scoring library
+- Files changed: src/scoring/types.ts, src/scoring/angles.ts, src/scoring/comparison.ts, src/scoring/index.ts, tests/unit/scoring/fixtures.ts, tests/unit/scoring/angles.test.ts, tests/unit/scoring/comparison.test.ts
+- 22 unit tests passing (12 for angles, 10 for comparison)
+- **Learnings for future iterations:**
+  - Joint angles are position/scale invariant by nature — no normalization needed
+  - MIN_CONFIDENCE threshold of 0.3 filters low-quality keypoints; joints with any sub-threshold keypoint are skipped entirely
+  - Standing vs T-pose elbow angles are more similar than expected (both nearly straight) — test assertions should account for this
+  - Use `makePose()` in fixtures to avoid manually specifying all 17 keypoints
 ---
