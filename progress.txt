@@ -153,3 +153,11 @@
   - Personal bests stored separately as `groovy_best_{danceId}` for quick lookup
   - History capped at 100 entries — oldest removed on overflow
 ---
+
+## 2026-03-14 - US-012
+- Created project README with setup instructions, how-it-works, adding new dances, tech stack
+- Pre-processed reference dance JSON included in repo at `public/dances/sample-dance.json`
+- Verified: clone, npm install, npm run dev starts everything needed
+- All 83 unit tests + 4 e2e tests passing, build clean
+- ALL 12 USER STORIES COMPLETE
+---

@@ -215,7 +215,8 @@
       ],
       "storyPoints": 2,
       "priority": "medium",
-      "dependencies": ["US-006"]
+      "dependencies": ["US-006"],
+      "passes": true
     }
   ]
 }
