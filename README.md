@@ -25,10 +25,30 @@ A sample dance is included — click "Start Dancing" and follow along!
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Start development server |
+| `npm run dev` | Start frontend + backend concurrently |
+| `npm run dev:frontend` | Start frontend only (Vite) |
+| `npm run dev:backend` | Start backend only (with file watching) |
+| `npm run server` | Start backend server (no watch) |
 | `npm run build` | TypeScript check + production build |
 | `npm run test` | Run unit tests (Vitest) |
 | `npm run test:e2e` | Run end-to-end tests (Playwright) |
+
+## Backend
+
+The backend is a lightweight Express server that handles video processing (Phase 2+). It runs on port 3001 by default.
+
+### Configuration
+
+Copy `.env.example` to `.env` to customize:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3001` | Backend server port |
+| `CORS_ORIGIN` | `http://localhost:5173` | Allowed CORS origin |
 
 ## How It Works
 

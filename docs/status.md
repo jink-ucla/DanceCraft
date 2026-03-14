@@ -17,9 +17,17 @@
 - US-102: UI polish pass — **COMPLETE**
 - US-103: Dance mode UI polish — **COMPLETE**
 
-## Phases 2-5: Planned
+## Phase 2: Dance Library & YouTube Integration (IN PROGRESS)
 
-- Phase 2: Dance Library & YouTube Integration (6 stories)
+- US-200: Backend API server setup — **COMPLETE**
+- US-201: YouTube video download and processing API — TODO
+- US-202: Dance library database and CRUD API — TODO
+- US-203: Add Dance UI — TODO
+- US-204: Dynamic dance library UI — TODO
+- US-205: Serve processed video/audio from backend — TODO
+
+## Phases 3-5: Planned
+
 - Phase 3: Recording & Replay (3 stories)
 - Phase 4: Practice Mode (4 stories)
 - Phase 5: Testing & Quality (6 stories)
@@ -32,7 +40,7 @@ None currently tracked.
 
 ## Test Summary
 
-- 88 unit tests (Vitest) — all passing
+- 91 unit tests (Vitest) — all passing
 - 5 e2e tests (Playwright) — all passing
 
 ## Blockers
@@ -41,4 +49,4 @@ None currently tracked.
 
 ## What's Next
 
-US-200: Backend API server setup (Phase 2)
+US-201: YouTube video download and processing API (Phase 2)

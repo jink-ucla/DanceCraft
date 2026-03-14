@@ -13,6 +13,11 @@
 - DanceMode has a `ready` phase between `loading` and `countdown` to ensure user interaction for autoplay with audio
 - React components go in `src/components/`
 - Python pipeline lives in `scripts/` with own `requirements.txt`; tests via `python scripts/test_schema.py`
+- Backend server lives in `server/` — `app.ts` exports Express app (for testing), `index.ts` starts the listener
+- Backend tests use `supertest` to test Express routes without starting the server
+- `npm run dev` uses `concurrently` to run frontend (Vite) and backend (tsx watch) together
+- Backend uses `tsx` for TypeScript execution (no compile step needed)
+- `.env` support via `dotenv` — `.env.example` has documented defaults
 
 ---
 
@@ -233,4 +238,24 @@
   - Confetti: inline styles with random values (left, delay, duration, color) work well for varied particle effects
   - Progress bar tracks refVideoRef.current.currentTime/duration on a 250ms interval during dancing phase
   - comboBroke state with auto-clear via useEffect timeout avoids stale break indicators
+---
+
+## 2026-03-14 - US-200
+- Set up Express backend server with health check endpoint
+- Split server into app.ts (exportable for testing) and index.ts (listener)
+- CORS configured for local development (localhost:5173)
+- Configurable port via .env (default 3001)
+- npm run dev now starts frontend + backend concurrently via `concurrently`
+- Added npm run server for standalone backend startup
+- 3 new unit tests for health endpoint via supertest (91 total)
+- TypeScript config: tsconfig.server.json added to project references
+- README updated with backend setup instructions and env vars
+- .env.example with documented defaults, .env added to .gitignore
+- Files changed: server/app.ts, server/index.ts, tsconfig.server.json, tsconfig.json, package.json, .gitignore, .env.example, README.md, tests/unit/server/health.test.ts, prd.json, docs/status.md
+- 91 unit tests + 5 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - Separate app.ts from index.ts so supertest can import the Express app without starting a listener
+  - Express 5 is installed (^5.2.1) — uses promises natively, no need for express-async-errors
+  - `tsx watch` provides hot-reload for backend development — paired with Vite for frontend via concurrently
+  - dotenv v17 logs an injection message to stdout — this is expected behavior, not an error
 ---
