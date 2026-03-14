@@ -1,18 +1,17 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  build: {
-    rollupOptions: {
-      // @mediapipe/pose is imported by pose-detection but unused with MoveNet
-      external: ['@mediapipe/pose'],
+  resolve: {
+    alias: {
+      // @mediapipe/pose is imported by pose-detection but unused with MoveNet.
+      // Stub it to avoid import errors in both dev and build.
+      '@mediapipe/pose': path.resolve(__dirname, 'src/stubs/mediapipe-pose.ts'),
     },
-  },
-  optimizeDeps: {
-    exclude: ['@mediapipe/pose'],
   },
   test: {
     globals: true,
