@@ -7,6 +7,7 @@ import { Settings } from './components/Settings'
 import { History } from './components/History'
 import { AddDance } from './components/AddDance'
 import { ReplayMode } from './components/ReplayMode'
+import { PracticeMode } from './components/PracticeMode'
 import { computePostDanceScore } from './scoring/dtw'
 import { computeRank } from './scoring/dtw'
 import { saveScore } from './storage/scores'
@@ -83,6 +84,7 @@ type View =
   | { screen: 'settings' }
   | { screen: 'history' }
   | { screen: 'replay'; dance: DanceInfo; result: DTWResult }
+  | { screen: 'practice'; dance: DanceInfo }
 
 function App() {
   const [view, setView] = useState<View>({ screen: 'home' })
@@ -199,6 +201,18 @@ function App() {
     )
   }
 
+  if (view.screen === 'practice') {
+    return (
+      <div className="app">
+        <PracticeMode
+          referencePoseUrl={view.dance.poseDataUrl}
+          referenceVideoUrl={view.dance.videoUrl}
+          onBack={() => setView({ screen: 'home' })}
+        />
+      </div>
+    )
+  }
+
   if (view.screen === 'replay') {
     const userVideoUrl = recordingBlobRef.current
       ? URL.createObjectURL(recordingBlobRef.current)
@@ -279,6 +293,7 @@ function App() {
           recordingBlobRef.current = null
           setView({ screen: 'dance', dance })
         }}
+        onPracticeDance={(dance) => setView({ screen: 'practice', dance })}
         onDeleteDance={handleDeleteDance}
         onSettings={() => setView({ screen: 'settings' })}
         onHistory={() => setView({ screen: 'history' })}

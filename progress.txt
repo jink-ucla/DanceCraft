@@ -31,6 +31,8 @@
 - Sessions stored in SQLite `sessions` table with foreign key to `dances`; CRUD in `server/db.ts`
 - Session routes in `server/routes/sessions.ts` — file uploads via multer
 - Session files stored in `data/sessions/{timestamp-random}/` (recording.webm, poses.json)
+- PracticeMode is a separate component from DanceMode — no scoring, pause/resume, blue color scheme
+- Practice mode phases: loading → ready → playing ↔ paused (via resuming with countdown)
 - All e2e tests that hit `/` must mock `**/api/dances` GET to avoid backend dependency
 - YouTube thumbnails: `https://img.youtube.com/vi/{videoId}/mqdefault.jpg` — no backend serving needed
 - API dance IDs prefixed with `api-` to distinguish from bundled dance IDs in frontend
@@ -430,4 +432,23 @@
   - Side-by-side video sync: both videos seek together via shared handleSeek function
   - Pose overlay drawing uses closest-time matching (within 0.5s) to find the right skeleton frame
   - User video has `scaleX(-1)` for mirror view (matches how it was recorded)
+---
+
+## 2026-03-14 - US-400
+- Created PracticeMode component: distinct from DanceMode with pause/resume, no scoring
+- Practice mode selectable via "Practice" button on each dance card
+- Spacebar keyboard shortcut for pause/resume
+- On-screen Pause button (top-right) and Resume button (paused overlay)
+- Paused state: reference video pauses, webcam stays active with skeleton overlay
+- Resume with 3-2-1 countdown before video resumes
+- Blue color scheme (badge, paused text, resume button) distinguishes from game mode (green)
+- Practice badge ("PRACTICE MODE") visible at top center during all phases
+- Back button navigates to home screen
+- Files changed: src/components/PracticeMode.tsx (new), src/components/HomeScreen.tsx, src/App.tsx, src/App.css, tests/e2e/practice-mode.spec.ts (new), prd.json, docs/status.md
+- 3 new e2e tests (181 unit + 25 e2e), build clean
+- **Learnings for future iterations:**
+  - PracticeMode has its own detection loop for paused state (webcam stays active but simpler loop)
+  - KeyboardEvent listener for Space must call `e.preventDefault()` to avoid page scroll
+  - Practice phases: loading → ready → playing ↔ paused (via resuming with 3-2-1 countdown)
+  - Dance card Practice button uses `e.stopPropagation()` to prevent card click from also firing
 ---

@@ -13,6 +13,7 @@ export interface DanceInfo {
 interface HomeScreenProps {
   dances: DanceInfo[]
   onSelectDance: (dance: DanceInfo) => void
+  onPracticeDance?: (dance: DanceInfo) => void
   onSettings?: () => void
   onHistory?: () => void
   onAddDance?: () => void
@@ -30,6 +31,7 @@ function getPersonalBest(danceId: string): number | null {
 export function HomeScreen({
   dances,
   onSelectDance,
+  onPracticeDance,
   onSettings,
   onHistory,
   onAddDance,
@@ -144,6 +146,17 @@ export function HomeScreen({
                   <span className="dance-card-best">
                     Best: {Math.floor(bests[dance.id]!)}
                   </span>
+                )}
+                {onPracticeDance && (
+                  <button
+                    className="dance-card-practice-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onPracticeDance(dance)
+                    }}
+                  >
+                    Practice
+                  </button>
                 )}
               </div>
               {onDeleteDance && dance.source === 'api' && (

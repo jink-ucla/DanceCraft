@@ -32,9 +32,15 @@
 - US-301: Save dance session data — **COMPLETE**
 - US-302: Replay mode — **COMPLETE**
 
-## Phases 4-5: Planned
+## Phase 4: Practice Mode (IN PROGRESS)
 
-- Phase 4: Practice Mode (4 stories)
+- US-400: Practice mode - pause and resume — **COMPLETE**
+- US-401: Practice mode - video scrubbing — TODO
+- US-402: Practice mode - section looping — TODO
+- US-403: Practice mode - target pose overlay — TODO
+
+## Phase 5: Planned
+
 - Phase 5: Testing & Quality (6 stories)
 
 See `prd.json` for full story details and `docs/roadmap.md` for the phased plan.
@@ -46,7 +52,7 @@ None currently tracked.
 ## Test Summary
 
 - 181 unit tests (Vitest) — all passing
-- 22 e2e tests (Playwright) — all passing
+- 25 e2e tests (Playwright) — all passing
 
 ## Blockers
 
@@ -54,4 +60,4 @@ None currently tracked.
 
 ## What's Next
 
-US-400: Practice mode - pause and resume (Phase 4)
+US-401: Practice mode - video scrubbing (Phase 4)
