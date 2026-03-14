@@ -12,11 +12,12 @@ import type { KeyPose, PoseTimeline } from '../scoring/keyPoseDetection'
 import type { Pose, Keypoint } from '../scoring/types'
 import type { TimestampedPose } from '../scoring/dtw'
 
-type DancePhase = 'loading' | 'countdown' | 'dancing' | 'finished'
+type DancePhase = 'loading' | 'ready' | 'countdown' | 'dancing' | 'finished'
 type FeedbackType = 'perfect' | 'good' | 'miss' | null
 
 interface DanceModeProps {
   referencePoseUrl: string
+  referenceVideoUrl?: string
   onFinish?: (score: number, totalHits: number, totalPoses: number) => void
   onRecordPose?: (pose: Pose, time: number) => void
   onReferencePosesLoaded?: (poses: TimestampedPose[]) => void
@@ -27,8 +28,9 @@ interface FeedbackDisplay {
   timestamp: number
 }
 
-export function DanceMode({ referencePoseUrl, onFinish, onRecordPose, onReferencePosesLoaded }: DanceModeProps) {
+export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRecordPose, onReferencePosesLoaded }: DanceModeProps) {
   const webcamRef = useRef<HTMLVideoElement>(null)
+  const refVideoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animFrameRef = useRef<number>(0)
   const streamRef = useRef<MediaStream | null>(null)
@@ -40,6 +42,8 @@ export function DanceMode({ referencePoseUrl, onFinish, onRecordPose, onReferenc
   const [feedback, setFeedback] = useState<FeedbackDisplay>({ type: null, timestamp: 0 })
   const [totalHits, setTotalHits] = useState(0)
   const [error, setError] = useState('')
+  const [volume, setVolume] = useState(0.7)
+  const [isMuted, setIsMuted] = useState(false)
 
   const keyPosesRef = useRef<KeyPose[]>([])
   const nextKeyPoseIdxRef = useRef(0)
@@ -147,10 +151,11 @@ export function DanceMode({ referencePoseUrl, onFinish, onRecordPose, onReferenc
       }
 
       // Check if dance is over
-      if (
-        nextIdx >= keyPoses.length &&
+      const refVideo = refVideoRef.current
+      const videoEnded = refVideo && refVideo.ended
+      const pastLastPose = nextIdx >= keyPoses.length &&
         elapsed > keyPoses[keyPoses.length - 1]?.timestamp + 2
-      ) {
+      if (videoEnded || pastLastPose) {
         setPhase('finished')
         return
       }
@@ -216,7 +221,7 @@ export function DanceMode({ referencePoseUrl, onFinish, onRecordPose, onReferenc
         await initDetector()
 
         if (!cancelled) {
-          setPhase('countdown')
+          setPhase('ready')
         }
       } catch (err) {
         if (!cancelled) {
@@ -245,18 +250,28 @@ export function DanceMode({ referencePoseUrl, onFinish, onRecordPose, onReferenc
       setPhase('dancing')
       danceStartTimeRef.current = Date.now()
       nextKeyPoseIdxRef.current = 0
+      // Start reference video playback with audio
+      if (refVideoRef.current) {
+        refVideoRef.current.currentTime = 0
+        refVideoRef.current.muted = false
+        refVideoRef.current.volume = volume
+        refVideoRef.current.play().catch(() => {})
+      }
       animFrameRef.current = requestAnimationFrame(danceLoop)
       return
     }
 
     const timer = setTimeout(() => setCountdown((c) => c - 1), 1000)
     return () => clearTimeout(timer)
-  }, [phase, countdown, danceLoop])
+  }, [phase, countdown, danceLoop, volume])
 
   // Handle finish
   useEffect(() => {
     if (phase === 'finished') {
       cancelAnimationFrame(animFrameRef.current)
+      if (refVideoRef.current) {
+        refVideoRef.current.pause()
+      }
       onFinish?.(score, totalHits, totalKeyPosesRef.current)
     }
   }, [phase, score, totalHits, onFinish])
@@ -267,16 +282,27 @@ export function DanceMode({ referencePoseUrl, onFinish, onRecordPose, onReferenc
 
   return (
     <div className="dance-mode">
-      {/* Reference video area (placeholder — uses pose data only for now) */}
+      {/* Reference video area */}
       <div className="dance-reference">
-        <div className="dance-reference-placeholder">
-          Reference Dance
-          {phase === 'dancing' && (
-            <div className="dance-timer">
-              {Math.floor((Date.now() - danceStartTimeRef.current) / 1000)}s
-            </div>
-          )}
-        </div>
+        {referenceVideoUrl ? (
+          <video
+            ref={refVideoRef}
+            src={referenceVideoUrl}
+            className="dance-reference-video"
+            playsInline
+            muted
+            preload="auto"
+          />
+        ) : (
+          <div className="dance-reference-placeholder">
+            Reference Dance
+            {phase === 'dancing' && (
+              <div className="dance-timer">
+                {Math.floor((Date.now() - danceStartTimeRef.current) / 1000)}s
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Webcam PIP */}
@@ -303,6 +329,50 @@ export function DanceMode({ referencePoseUrl, onFinish, onRecordPose, onReferenc
           <div className="dance-combo">{combo}x Combo</div>
         )}
       </div>
+
+      {/* Volume control */}
+      {(phase === 'dancing' || phase === 'ready' || phase === 'countdown') && (
+        <div className="dance-volume-control">
+          <button
+            className="dance-volume-btn"
+            onClick={() => {
+              setIsMuted((m) => {
+                const newMuted = !m
+                if (refVideoRef.current) refVideoRef.current.muted = newMuted
+                return newMuted
+              })
+            }}
+            aria-label={isMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMuted ? '🔇' : volume > 0.5 ? '🔊' : '🔉'}
+          </button>
+          <input
+            type="range"
+            className="dance-volume-slider"
+            min="0"
+            max="1"
+            step="0.05"
+            value={isMuted ? 0 : volume}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value)
+              setVolume(v)
+              setIsMuted(v === 0)
+              if (refVideoRef.current) {
+                refVideoRef.current.volume = v
+                refVideoRef.current.muted = v === 0
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {/* Ready overlay - tap to start (ensures user interaction for autoplay with audio) */}
+      {phase === 'ready' && (
+        <div className="dance-ready-overlay" onClick={() => setPhase('countdown')}>
+          <div className="dance-ready-text">Tap to Start</div>
+          <div className="dance-ready-hint">Music will play during the dance</div>
+        </div>
+      )}
 
       {/* Countdown overlay */}
       {phase === 'countdown' && (
