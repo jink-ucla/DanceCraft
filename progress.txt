@@ -27,6 +27,7 @@
 - `getDb()` reads `DB_PATH` from env at call time (not module load) — needed for test isolation
 - Delete dance route cleans up associated files (video, audio, poses, thumbnail) from disk
 - File serving routes (/:id/video, /:id/audio, etc.) use fs.createReadStream for streaming; video/audio support Range requests for seeking
+- Webcam recording uses a hidden composite canvas (webcam + skeleton) captured via `captureStream(30)` → MediaRecorder
 - All e2e tests that hit `/` must mock `**/api/dances` GET to avoid backend dependency
 - YouTube thumbnails: `https://img.youtube.com/vi/{videoId}/mqdefault.jpg` — no backend serving needed
 - API dance IDs prefixed with `api-` to distinguish from bundled dance IDs in frontend
@@ -367,4 +368,24 @@
   - Range request: parse `bytes=start-end` from header, return 206 with Content-Range header, stream partial file via createReadStream({ start, end })
   - Express route order matters: sub-resource routes (/:id/video, /:id/poses) must be declared before the parametric /:id catch-all
   - The frontend was already prepared for API serving — apiDanceToDanceInfo() in App.tsx maps API dances to URLs like `${API_BASE}/api/dances/${id}/video`
+---
+
+## 2026-03-14 - US-300
+- Implemented webcam recording during dance using MediaRecorder API
+- Added hidden composite canvas that draws webcam frame + skeleton overlay together
+- Composite canvas captured via `captureStream(30)` at 30fps for recording
+- MediaRecorder starts after countdown (when dance begins), stops on finish
+- Recording produces a Blob (WebM with VP9/VP8 codec) passed via `onRecordingComplete` callback
+- Graceful degradation: if MediaRecorder fails, dance continues without recording
+- Compressed recording at 1.5 Mbps bitrate for reasonable file sizes
+- Cleanup on unmount stops any active recording
+- Files changed: src/components/DanceMode.tsx, tests/unit/components/danceMode.test.ts, prd.json, docs/status.md
+- 5 new unit tests (162 total) + 21 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - `canvas.captureStream(fps)` returns a MediaStream from a canvas — ideal for recording composited frames
+  - MediaRecorder codec support varies: check `isTypeSupported()` and fall back through vp9 → vp8 → plain webm
+  - `videoBitsPerSecond: 1_500_000` (1.5 Mbps) gives good quality at ~11 MB/min for 320x240
+  - MediaRecorder `start(timeslice)` collects data periodically — 1000ms chunks prevent memory buildup
+  - The composite canvas must be initialized with webcam dimensions in the init function (not at component mount)
+  - Recording cleanup in the unmount effect must check `state !== 'inactive'` before calling `stop()`
 ---

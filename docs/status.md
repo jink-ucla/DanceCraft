@@ -26,9 +26,14 @@
 - US-204: Dynamic dance library UI — **COMPLETE**
 - US-205: Serve processed video/audio from backend — **COMPLETE**
 
-## Phases 3-5: Planned
+## Phase 3: Recording & Replay (IN PROGRESS)
 
-- Phase 3: Recording & Replay (3 stories)
+- US-300: Record user webcam video during dance — **COMPLETE**
+- US-301: Save dance session data — TODO
+- US-302: Replay mode — TODO
+
+## Phases 4-5: Planned
+
 - Phase 4: Practice Mode (4 stories)
 - Phase 5: Testing & Quality (6 stories)
 
@@ -40,7 +45,7 @@ None currently tracked.
 
 ## Test Summary
 
-- 157 unit tests (Vitest) — all passing
+- 162 unit tests (Vitest) — all passing
 - 21 e2e tests (Playwright) — all passing
 
 ## Blockers
@@ -49,4 +54,4 @@ None currently tracked.
 
 ## What's Next
 
-US-300: Record user webcam video during dance (Phase 3)
+US-301: Save dance session data (Phase 3)

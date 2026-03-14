@@ -21,6 +21,7 @@ interface DanceModeProps {
   onFinish?: (score: number, totalHits: number, totalPoses: number) => void
   onRecordPose?: (pose: Pose, time: number) => void
   onReferencePosesLoaded?: (poses: TimestampedPose[]) => void
+  onRecordingComplete?: (blob: Blob) => void
 }
 
 interface FeedbackDisplay {
@@ -28,12 +29,15 @@ interface FeedbackDisplay {
   timestamp: number
 }
 
-export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRecordPose, onReferencePosesLoaded }: DanceModeProps) {
+export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRecordPose, onReferencePosesLoaded, onRecordingComplete }: DanceModeProps) {
   const webcamRef = useRef<HTMLVideoElement>(null)
   const refVideoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const compositeCanvasRef = useRef<HTMLCanvasElement>(null)
   const animFrameRef = useRef<number>(0)
   const streamRef = useRef<MediaStream | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
 
   const [phase, setPhase] = useState<DancePhase>('loading')
   const [countdown, setCountdown] = useState(3)
@@ -137,6 +141,16 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
     const userPose = await estimatePose(video)
     if (userPose) {
       drawPose(ctx, userPose, canvas.width, canvas.height)
+
+      // Draw composite frame for recording (webcam + skeleton overlay)
+      const compositeCanvas = compositeCanvasRef.current
+      if (compositeCanvas) {
+        const cCtx = compositeCanvas.getContext('2d')
+        if (cCtx) {
+          cCtx.drawImage(video, 0, 0, compositeCanvas.width, compositeCanvas.height)
+          cCtx.drawImage(canvas, 0, 0, compositeCanvas.width, compositeCanvas.height)
+        }
+      }
 
       // Record pose for post-dance scoring
       const elapsed = (Date.now() - danceStartTimeRef.current) / 1000
@@ -255,6 +269,13 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
           canvas.height = video.videoHeight
         }
 
+        // Initialize composite canvas for recording (same dimensions as webcam)
+        const compositeCanvas = compositeCanvasRef.current
+        if (compositeCanvas) {
+          compositeCanvas.width = video.videoWidth
+          compositeCanvas.height = video.videoHeight
+        }
+
         // Init pose detector
         await initDetector()
 
@@ -277,8 +298,59 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop())
       }
+      // Stop recording if still active
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+        mediaRecorderRef.current = null
+      }
     }
   }, [referencePoseUrl])
+
+  // Start recording from composite canvas
+  const startRecording = useCallback(() => {
+    const compositeCanvas = compositeCanvasRef.current
+    if (!compositeCanvas) return
+
+    try {
+      const stream = compositeCanvas.captureStream(30)
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+        ? 'video/webm;codecs=vp9'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+          ? 'video/webm;codecs=vp8'
+          : 'video/webm'
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: 1_500_000,
+      })
+
+      recordedChunksRef.current = []
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          recordedChunksRef.current.push(e.data)
+        }
+      }
+      recorder.start(1000) // collect data every second
+      mediaRecorderRef.current = recorder
+    } catch {
+      // Graceful degradation: recording fails silently, dance continues
+      mediaRecorderRef.current = null
+    }
+  }, [])
+
+  // Stop recording and produce blob
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current
+    if (!recorder || recorder.state === 'inactive') return
+
+    recorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType })
+      onRecordingComplete?.(blob)
+      recordedChunksRef.current = []
+    }
+    recorder.stop()
+    mediaRecorderRef.current = null
+  }, [onRecordingComplete])
 
   // Countdown timer
   useEffect(() => {
@@ -295,6 +367,8 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
         refVideoRef.current.volume = volume
         refVideoRef.current.play().catch(() => {})
       }
+      // Start recording the composite canvas
+      startRecording()
       animFrameRef.current = requestAnimationFrame(danceLoop)
       return
     }
@@ -310,9 +384,10 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
       if (refVideoRef.current) {
         refVideoRef.current.pause()
       }
+      stopRecording()
       onFinish?.(score, totalHits, totalKeyPosesRef.current)
     }
-  }, [phase, score, totalHits, onFinish])
+  }, [phase, score, totalHits, onFinish, stopRecording])
 
   if (error) {
     return <div className="dance-error">{error}</div>
@@ -374,6 +449,12 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
           style={{ transform: 'scaleX(-1)' }}
         />
       </div>
+
+      {/* Hidden composite canvas for recording (webcam + skeleton overlay) */}
+      <canvas
+        ref={compositeCanvasRef}
+        style={{ display: 'none' }}
+      />
 
       {/* HUD */}
       <div className="dance-hud">
