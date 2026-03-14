@@ -15,7 +15,7 @@
 - US-100: Fix music/audio not playing — **COMPLETE**
 - US-101: Move feedback to corner — **COMPLETE**
 - US-102: UI polish pass — **COMPLETE**
-- US-103: Dance mode UI polish — **not started**
+- US-103: Dance mode UI polish — **COMPLETE**
 
 ## Phases 2-5: Planned
 
@@ -41,4 +41,4 @@ None currently tracked.
 
 ## What's Next
 
-US-103: Dance mode UI polish (HUD, overlays, game feel)
+US-200: Backend API server setup (Phase 2)

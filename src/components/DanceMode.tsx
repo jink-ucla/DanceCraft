@@ -38,17 +38,47 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
   const [phase, setPhase] = useState<DancePhase>('loading')
   const [countdown, setCountdown] = useState(3)
   const [score, setScore] = useState(0)
+  const [displayScore, setDisplayScore] = useState(0)
   const [combo, setCombo] = useState(0)
+  const [comboKey, setComboKey] = useState(0)
+  const [comboBroke, setComboBroke] = useState(false)
   const [feedback, setFeedback] = useState<FeedbackDisplay>({ type: null, timestamp: 0 })
   const [totalHits, setTotalHits] = useState(0)
   const [error, setError] = useState('')
   const [volume, setVolume] = useState(0.7)
   const [isMuted, setIsMuted] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [videoDuration, setVideoDuration] = useState(0)
 
   const keyPosesRef = useRef<KeyPose[]>([])
   const nextKeyPoseIdxRef = useRef(0)
   const danceStartTimeRef = useRef(0)
   const totalKeyPosesRef = useRef(0)
+
+  // Animate displayed score toward actual score
+  useEffect(() => {
+    if (displayScore === score) return
+    const step = Math.max(1, Math.ceil((score - displayScore) / 10))
+    const timer = setTimeout(() => {
+      setDisplayScore((d) => Math.min(d + step, Math.floor(score)))
+    }, 20)
+    return () => clearTimeout(timer)
+  }, [displayScore, score])
+
+  // Track video progress
+  useEffect(() => {
+    if (phase !== 'dancing') return
+    const video = refVideoRef.current
+    if (!video) return
+    const updateProgress = () => {
+      if (video.duration && isFinite(video.duration)) {
+        setVideoDuration(video.duration)
+        setProgress(video.currentTime / video.duration)
+      }
+    }
+    const interval = setInterval(updateProgress, 250)
+    return () => clearInterval(interval)
+  }, [phase])
 
   // Draw pose overlay on webcam canvas
   const drawPose = useCallback(
@@ -128,24 +158,32 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
             showFeedback('perfect')
             setScore((s) => s + 100 * (1 + combo * 0.1))
             setCombo((c) => c + 1)
+            setComboKey((k) => k + 1)
             setTotalHits((h) => h + 1)
             nextKeyPoseIdxRef.current++
           } else if (result.overallScore >= 0.65) {
             showFeedback('good')
             setScore((s) => s + 50 * (1 + combo * 0.05))
             setCombo((c) => c + 1)
+            setComboKey((k) => k + 1)
             setTotalHits((h) => h + 1)
             nextKeyPoseIdxRef.current++
           } else if (elapsed > nextKP.timestamp + 0.5) {
             // Missed — past the window
             showFeedback('miss')
-            setCombo(0)
+            setCombo((c) => {
+              if (c > 1) setComboBroke(true)
+              return 0
+            })
             nextKeyPoseIdxRef.current++
           }
         } else if (elapsed > nextKP.timestamp + 0.5) {
           // Completely missed
           showFeedback('miss')
-          setCombo(0)
+          setCombo((c) => {
+            if (c > 1) setComboBroke(true)
+            return 0
+          })
           nextKeyPoseIdxRef.current++
         }
       }
@@ -280,6 +318,22 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
     return <div className="dance-error">{error}</div>
   }
 
+  const hitRate = totalKeyPosesRef.current > 0 ? totalHits / totalKeyPosesRef.current : 0
+  const isHighScore = hitRate >= 0.6
+
+  // Clear combo break indicator after animation
+  useEffect(() => {
+    if (!comboBroke) return
+    const timer = setTimeout(() => setComboBroke(false), 600)
+    return () => clearTimeout(timer)
+  }, [comboBroke])
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = Math.floor(seconds % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
   return (
     <div className="dance-mode">
       {/* Reference video area */}
@@ -307,6 +361,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
 
       {/* Webcam PIP */}
       <div className="dance-webcam-pip">
+        <div className="dance-pip-label">YOU</div>
         <video
           ref={webcamRef}
           playsInline
@@ -322,13 +377,34 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
 
       {/* HUD */}
       <div className="dance-hud">
-        <div className="dance-score">
-          {Math.floor(score)}
+        <div className="dance-score-container">
+          <div className="dance-score-label">SCORE</div>
+          <div className="dance-score" key={`score-${Math.floor(score)}`}>
+            {displayScore}
+          </div>
         </div>
         {combo > 1 && (
-          <div className="dance-combo">{combo}x Combo</div>
+          <div className="dance-combo" key={`combo-${comboKey}`}>
+            <span className="dance-combo-multiplier">{combo}x</span>
+            <span className="dance-combo-text">COMBO</span>
+          </div>
+        )}
+        {comboBroke && (
+          <div className="dance-combo-break">Combo Break!</div>
         )}
       </div>
+
+      {/* Progress bar */}
+      {phase === 'dancing' && (
+        <div className="dance-progress-bar">
+          <div className="dance-progress-fill" style={{ width: `${progress * 100}%` }} />
+          <div className="dance-progress-time">
+            {videoDuration > 0
+              ? `${formatTime(progress * videoDuration)} / ${formatTime(videoDuration)}`
+              : ''}
+          </div>
+        </div>
+      )}
 
       {/* Volume control */}
       {(phase === 'dancing' || phase === 'ready' || phase === 'countdown') && (
@@ -377,7 +453,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
       {/* Countdown overlay */}
       {phase === 'countdown' && (
         <div className="dance-countdown-overlay">
-          <div className="dance-countdown-number">
+          <div className="dance-countdown-number" key={`cd-${countdown}`}>
             {countdown > 0 ? countdown : 'GO!'}
           </div>
         </div>
@@ -392,7 +468,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
 
       {/* Feedback flash */}
       {feedback.type && (
-        <div className={`dance-feedback dance-feedback-${feedback.type}`}>
+        <div className={`dance-feedback dance-feedback-${feedback.type}`} key={feedback.timestamp}>
           {feedback.type === 'perfect' && 'Perfect!'}
           {feedback.type === 'good' && 'Good!'}
           {feedback.type === 'miss' && 'Miss'}
@@ -401,13 +477,30 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
 
       {/* Finished overlay */}
       {phase === 'finished' && (
-        <div className="dance-finished-overlay">
-          <h2>Dance Complete!</h2>
+        <div className={`dance-finished-overlay ${isHighScore ? 'dance-finished-celebrate' : ''}`}>
+          {isHighScore && (
+            <div className="dance-confetti" aria-hidden="true">
+              {Array.from({ length: 30 }, (_, i) => (
+                <span
+                  key={i}
+                  className="dance-confetti-piece"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    animationDelay: `${Math.random() * 0.5}s`,
+                    animationDuration: `${1.5 + Math.random() * 1.5}s`,
+                    backgroundColor: ['#00ff88', '#ffcc00', '#00ccff', '#ff6b6b', '#ff88ff'][i % 5],
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          <h2 className="dance-finished-title">{isHighScore ? 'Amazing!' : 'Dance Complete!'}</h2>
           <div className="dance-final-score">
-            Score: {Math.floor(score)}
+            {Math.floor(score)}
           </div>
+          <div className="dance-final-score-label">points</div>
           <div className="dance-final-hits">
-            Hits: {totalHits} / {totalKeyPosesRef.current}
+            {totalHits} / {totalKeyPosesRef.current} poses hit
           </div>
         </div>
       )}

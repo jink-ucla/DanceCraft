@@ -213,3 +213,24 @@
   - backdrop-filter: blur() adds polish to overlays but may impact performance on low-end devices
   - Google Fonts @import in CSS works with Vite — no need for separate HTML link tag
 ---
+
+## 2026-03-14 - US-103
+- Dance mode UI polish pass: HUD, overlays, and game feel
+- Animated score counter: displayScore state ticks up toward actual score with setTimeout steps
+- Combo counter: pulses on increase via `key` prop change triggering CSS `comboPop` animation
+- Combo break indicator: "Combo Break!" text appears and fades down on combo reset (>1 combo)
+- Countdown: larger numbers (140px), blur-to-sharp drop-in animation with double glow shadow
+- Finish overlay: confetti particles for high scores (≥60% hit rate), score reveal animation, "Amazing!" title
+- Webcam PIP: "YOU" label, rounded corners, accent glow border, clean black background
+- Progress bar: gradient fill bar at bottom of dance mode with timestamp display
+- Reference video: subtle bottom border for clean edge definition
+- Responsive: smaller score/combo/countdown on mobile
+- Files changed: src/components/DanceMode.tsx, src/App.css, prd.json, docs/status.md
+- 88 unit tests + 5 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - React `key` prop trick: changing key on an element restarts its CSS animation — useful for combo pulse, countdown, feedback
+  - Animating score display: use a separate `displayScore` state that ticks toward actual `score` — avoids jarring jumps
+  - Confetti: inline styles with random values (left, delay, duration, color) work well for varied particle effects
+  - Progress bar tracks refVideoRef.current.currentTime/duration on a 250ms interval during dancing phase
+  - comboBroke state with auto-clear via useEffect timeout avoids stale break indicators
+---

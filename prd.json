@@ -304,7 +304,7 @@
       "storyPoints": 5,
       "priority": "high",
       "dependencies": ["US-102"],
-      "passes": false
+      "passes": true
     },
 
     {
