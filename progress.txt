@@ -519,3 +519,12 @@
   - HTML reporter with `open: 'never'` prevents auto-opening browser in CI
   - toHaveScreenshot threshold controls anti-aliasing tolerance
 ---
+
+## 2026-03-14 - US-501
+- Comprehensive e2e tests for home screen and navigation (11 tests)
+- Tests: home loads, API dances, card click → dance mode, settings, history, add dance, delete dance, error state, text visibility, practice buttons
+- Screenshots captured at each step for visual verification
+- Uses helpers from tests/e2e/helpers.ts for consistent API mocking
+- Files changed: tests/e2e/home-navigation.spec.ts (new), prd.json, docs/status.md
+- 181 unit + 36 e2e tests passing, build clean
+---
