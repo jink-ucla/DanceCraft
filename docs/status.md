@@ -45,7 +45,7 @@
 - US-501: E2e tests - home screen and navigation — **COMPLETE**
 - US-502: E2e tests - dance mode lifecycle — **COMPLETE**
 - US-503: E2e tests - practice mode — **COMPLETE**
-- US-504: E2e tests - recording and replay — TODO
+- US-504: E2e tests - recording and replay — **COMPLETE**
 - US-505: Visual regression test baseline — TODO
 
 See `prd.json` for full story details and `docs/roadmap.md` for the phased plan.
@@ -57,7 +57,7 @@ None currently tracked.
 ## Test Summary
 
 - 181 unit tests (Vitest) — all passing
-- 47 e2e tests (Playwright) — all passing
+- 52 e2e tests (Playwright) — all passing
 
 ## Blockers
 
@@ -65,4 +65,4 @@ None currently tracked.
 
 ## What's Next
 
-US-504: E2e tests - recording and replay (Phase 5)
+US-505: Visual regression test baseline (Phase 5)
