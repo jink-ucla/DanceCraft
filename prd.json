@@ -348,7 +348,7 @@
       "storyPoints": 8,
       "priority": "critical",
       "dependencies": ["US-200"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-202",

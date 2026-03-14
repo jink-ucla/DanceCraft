@@ -18,6 +18,10 @@
 - `npm run dev` uses `concurrently` to run frontend (Vite) and backend (tsx watch) together
 - Backend uses `tsx` for TypeScript execution (no compile step needed)
 - `.env` support via `dotenv` — `.env.example` has documented defaults
+- Backend routes organized in `server/routes/` — imported and mounted in `server/app.ts`
+- Job manager (`server/jobs.ts`) is in-memory — use for async processing tracking
+- Processing pipeline (`server/processing.ts`) shells out to yt-dlp, ffmpeg, and Python scripts
+- Processed dance data stored in `data/dances/{jobId}/` (video.mp4, audio.mp3, poses.json, thumbnail.jpg)
 
 ---
 
@@ -258,4 +262,26 @@
   - Express 5 is installed (^5.2.1) — uses promises natively, no need for express-async-errors
   - `tsx watch` provides hot-reload for backend development — paired with Vite for frontend via concurrently
   - dotenv v17 logs an injection message to stdout — this is expected behavior, not an error
+---
+
+## 2026-03-14 - US-201
+- Implemented YouTube video download and processing API
+- Created in-memory job manager (server/jobs.ts) with create/get/update/list/clear operations
+- Created processing pipeline (server/processing.ts): yt-dlp download, ffmpeg audio extraction, ffmpeg thumbnail generation, Python pose extraction
+- Created API routes (server/routes/dances.ts): POST /api/dances/process and GET /api/dances/jobs/:id
+- YouTube URL validation (youtube.com, youtu.be, m.youtube.com)
+- Videos > 10 minutes rejected with clear error
+- Processing runs in background (non-blocking) with status tracking (queued/downloading/extracting_audio/extracting_poses/generating_thumbnail/complete/error)
+- Fetches video metadata (title, duration, channel) from YouTube via yt-dlp --dump-json
+- Added data/ to .gitignore, DATA_DIR env var to .env.example
+- Files changed: server/jobs.ts, server/processing.ts, server/routes/dances.ts, server/app.ts, .env.example, .gitignore, tests/unit/server/jobs.test.ts, tests/unit/server/dances.test.ts, tests/unit/server/processing.test.ts
+- 30 new unit tests (121 total) + 5 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - Job manager is in-memory — jobs lost on server restart. US-202 will add SQLite persistence.
+  - processJob runs async after HTTP response returns 202 — errors are captured in the job, not thrown to the caller
+  - yt-dlp --dump-json fetches metadata without downloading the video — useful for pre-validation
+  - ffmpeg -vn -acodec libmp3lame extracts audio; -ss 00:00:03 -vframes 1 grabs a thumbnail frame
+  - Mock vi.mock for processing.ts in route tests to avoid needing yt-dlp/ffmpeg installed in CI
+  - POST returns 202 (Accepted) not 200 since processing is async
+  - extract_poses.py takes a local video path as first positional arg (not YouTube URL) when called from the backend
 ---
