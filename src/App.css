@@ -341,3 +341,171 @@
   color: #00ff88;
   margin-top: 4px;
 }
+
+/* Results Screen */
+.results-screen {
+  width: 100%;
+  max-width: 600px;
+  text-align: center;
+}
+
+.results-header h2 {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+.results-dance-name {
+  color: #888;
+  margin-bottom: 24px;
+}
+
+.results-score-section {
+  margin-bottom: 32px;
+}
+
+.results-rank {
+  font-size: 72px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.results-percentage {
+  font-size: 36px;
+  color: #fff;
+  margin: 8px 0;
+}
+
+.results-message {
+  color: #aaa;
+  font-size: 16px;
+}
+
+.results-timeline {
+  margin-bottom: 28px;
+  text-align: left;
+}
+
+.results-timeline h3 {
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: #ccc;
+}
+
+.timeline-bar {
+  display: flex;
+  height: 32px;
+  border-radius: 6px;
+  overflow: hidden;
+  gap: 2px;
+}
+
+.timeline-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  cursor: default;
+  transition: opacity 0.2s;
+}
+
+.timeline-segment:hover {
+  opacity: 0.8;
+}
+
+.timeline-segment-label {
+  font-size: 11px;
+  color: #000;
+  font-weight: bold;
+}
+
+.timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.results-breakdown {
+  margin-bottom: 28px;
+  text-align: left;
+}
+
+.results-breakdown h3 {
+  font-size: 16px;
+  margin-bottom: 12px;
+  color: #ccc;
+}
+
+.breakdown-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.breakdown-label {
+  width: 60px;
+  font-size: 14px;
+  color: #aaa;
+}
+
+.breakdown-bar-track {
+  flex: 1;
+  height: 16px;
+  background: #222;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.breakdown-bar-fill {
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.5s ease-out;
+}
+
+.breakdown-value {
+  width: 40px;
+  font-size: 14px;
+  color: #ccc;
+  text-align: right;
+}
+
+.results-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.results-btn {
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  border: none;
+}
+
+.results-btn-retry {
+  background: #00ff88;
+  color: #000;
+  font-weight: bold;
+}
+
+.results-btn-retry:hover {
+  background: #00dd77;
+}
+
+.results-btn-home {
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+}
+
+.results-btn-home:hover {
+  background: #444;
+}

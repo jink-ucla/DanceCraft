@@ -114,5 +114,17 @@
 - **Learnings for future iterations:**
   - Available dances defined as AVAILABLE_DANCES constant in App.tsx — add new dances there
   - Personal best scores stored as `groovy_best_{danceId}` in localStorage
-  - View routing uses discriminated union type `{ screen: 'home' } | { screen: 'dance'; dance: DanceInfo }` for type safety
+  - View routing uses discriminated union type — now extended with `{ screen: 'results'; dance; result }` for type safety
+---
+
+## 2026-03-14 - US-008
+- Created ResultsScreen component with score, rank, color-coded timeline bar, body part breakdown
+- Wired DanceMode → ResultsScreen flow with post-dance DTW scoring
+- Added pose recording callback (onRecordPose) and reference pose passing (onReferencePosesLoaded) to DanceMode
+- Files changed: src/components/ResultsScreen.tsx, src/components/DanceMode.tsx, src/App.tsx, src/App.css, tests/e2e/results.spec.ts
+- 1 new e2e test (results screen renders with mock data)
+- **Learnings for future iterations:**
+  - ResultsScreen receives DTWResult — all scoring computation happens in App.tsx via computePostDanceScore
+  - Pose recording during dance via onRecordPose callback — avoids coupling DanceMode to DTW scoring
+  - Timeline segments sized by flex proportional to time range — natural visualization of section lengths
 ---

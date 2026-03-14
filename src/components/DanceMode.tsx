@@ -9,7 +9,8 @@ import {
 import { comparePoses } from '../scoring/comparison'
 import { detectKeyPoses } from '../scoring/keyPoseDetection'
 import type { KeyPose, PoseTimeline } from '../scoring/keyPoseDetection'
-import type { Pose } from '../scoring/types'
+import type { Pose, Keypoint } from '../scoring/types'
+import type { TimestampedPose } from '../scoring/dtw'
 
 type DancePhase = 'loading' | 'countdown' | 'dancing' | 'finished'
 type FeedbackType = 'perfect' | 'good' | 'miss' | null
@@ -17,6 +18,8 @@ type FeedbackType = 'perfect' | 'good' | 'miss' | null
 interface DanceModeProps {
   referencePoseUrl: string
   onFinish?: (score: number, totalHits: number, totalPoses: number) => void
+  onRecordPose?: (pose: Pose, time: number) => void
+  onReferencePosesLoaded?: (poses: TimestampedPose[]) => void
 }
 
 interface FeedbackDisplay {
@@ -24,7 +27,7 @@ interface FeedbackDisplay {
   timestamp: number
 }
 
-export function DanceMode({ referencePoseUrl, onFinish }: DanceModeProps) {
+export function DanceMode({ referencePoseUrl, onFinish, onRecordPose, onReferencePosesLoaded }: DanceModeProps) {
   const webcamRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animFrameRef = useRef<number>(0)
@@ -101,8 +104,11 @@ export function DanceMode({ referencePoseUrl, onFinish }: DanceModeProps) {
     if (userPose) {
       drawPose(ctx, userPose, canvas.width, canvas.height)
 
-      // Check key pose matches
+      // Record pose for post-dance scoring
       const elapsed = (Date.now() - danceStartTimeRef.current) / 1000
+      onRecordPose?.(userPose, elapsed)
+
+      // Check key pose matches
       const keyPoses = keyPosesRef.current
       const nextIdx = nextKeyPoseIdxRef.current
 
@@ -172,6 +178,13 @@ export function DanceMode({ referencePoseUrl, onFinish }: DanceModeProps) {
         })
         keyPosesRef.current = keyPoses
         totalKeyPosesRef.current = keyPoses.length
+
+        // Pass reference poses to parent for post-dance DTW scoring
+        const refPoses: TimestampedPose[] = timeline.keyframes.map((kf) => ({
+          time: kf.time,
+          pose: { keypoints: kf.keypoints as Keypoint[] },
+        }))
+        onReferencePosesLoaded?.(refPoses)
 
         // Start webcam
         if (!navigator.mediaDevices?.getUserMedia) {

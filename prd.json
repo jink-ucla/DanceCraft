@@ -149,7 +149,8 @@
       ],
       "storyPoints": 5,
       "priority": "high",
-      "dependencies": ["US-007"]
+      "dependencies": ["US-007"],
+      "passes": true
     },
     {
       "id": "US-009",
