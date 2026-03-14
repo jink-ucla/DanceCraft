@@ -658,7 +658,7 @@
       "storyPoints": 3,
       "priority": "medium",
       "dependencies": ["US-500", "US-400"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-504",

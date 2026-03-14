@@ -44,7 +44,7 @@
 - US-500: Playwright e2e test infrastructure overhaul — **COMPLETE**
 - US-501: E2e tests - home screen and navigation — **COMPLETE**
 - US-502: E2e tests - dance mode lifecycle — **COMPLETE**
-- US-503: E2e tests - practice mode — TODO
+- US-503: E2e tests - practice mode — **COMPLETE**
 - US-504: E2e tests - recording and replay — TODO
 - US-505: Visual regression test baseline — TODO
 
@@ -57,7 +57,7 @@ None currently tracked.
 ## Test Summary
 
 - 181 unit tests (Vitest) — all passing
-- 43 e2e tests (Playwright) — all passing
+- 47 e2e tests (Playwright) — all passing
 
 ## Blockers
 
@@ -65,4 +65,4 @@ None currently tracked.
 
 ## What's Next
 
-US-503: E2e tests - practice mode (Phase 5)
+US-504: E2e tests - recording and replay (Phase 5)

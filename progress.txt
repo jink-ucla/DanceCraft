@@ -537,3 +537,10 @@
 - Files changed: tests/e2e/dance-lifecycle.spec.ts (new), prd.json, docs/status.md
 - 181 unit + 43 e2e tests passing, build clean
 ---
+
+## 2026-03-14 - US-503
+- Practice mode e2e tests (7 tests covering all acceptance criteria)
+- Tests: distinct from game mode, pause/resume, scrubber, loop controls, ghost toggle, no scoring, practice button
+- Files changed: tests/e2e/practice-mode.spec.ts (rewritten), prd.json, docs/status.md
+- 181 unit + 47 e2e tests passing, build clean
+---
