@@ -485,3 +485,19 @@
   - Minimum loop duration prevents accidental micro-loops
   - playbackRate property on HTMLVideoElement handles slow-motion natively
 ---
+
+## 2026-03-14 - US-403
+- Added ghost/reference pose overlay on webcam in practice mode
+- Semi-transparent blue/cyan skeleton drawn from reference pose data at current video time
+- Higher opacity (0.6) when paused vs lower (0.3) when playing
+- Toggle button ("Ghost ON/OFF") to show/hide the overlay
+- Reference skeleton updates in real-time as video plays
+- Ghost overlay drawn after user skeleton so it layers on top
+- Files changed: src/components/PracticeMode.tsx, src/App.css, prd.json, docs/status.md
+- 181 unit + 25 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - Reference pose keypoints need scaling to match webcam canvas dimensions
+  - Ghost overlay uses closest-time matching (within 0.5s) same as ReplayMode
+  - Drawing order matters: user skeleton first (green), then ghost (blue) on top
+  - showGhostOverlay state must be in drawGhostPose dependency array for toggle to work
+---

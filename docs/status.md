@@ -37,7 +37,7 @@
 - US-400: Practice mode - pause and resume — **COMPLETE**
 - US-401: Practice mode - video scrubbing — **COMPLETE**
 - US-402: Practice mode - section looping — **COMPLETE**
-- US-403: Practice mode - target pose overlay — TODO
+- US-403: Practice mode - target pose overlay — **COMPLETE**
 
 ## Phase 5: Planned
 
@@ -60,4 +60,4 @@ None currently tracked.
 
 ## What's Next
 
-US-403: Practice mode - target pose overlay (Phase 4)
+US-500: Playwright e2e test infrastructure overhaul (Phase 5)

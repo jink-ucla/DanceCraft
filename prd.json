@@ -573,7 +573,7 @@
       "storyPoints": 5,
       "priority": "medium",
       "dependencies": ["US-400"],
-      "passes": false
+      "passes": true
     },
 
     {

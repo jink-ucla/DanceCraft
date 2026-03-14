@@ -32,6 +32,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
   const [loopEnd, setLoopEnd] = useState<number | null>(null)
   const [loopCount, setLoopCount] = useState(0)
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
+  const [showGhostOverlay, setShowGhostOverlay] = useState(true)
 
   // Reference pose data for ghost overlay
   const referencePosesRef = useRef<{ time: number; keypoints: Keypoint[] }[]>([])
@@ -67,6 +68,56 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     []
   )
 
+  // Draw reference ghost skeleton at current time
+  const drawGhostPose = useCallback((ctx: CanvasRenderingContext2D, time: number, canvasWidth: number, canvasHeight: number, isPaused: boolean) => {
+    if (!showGhostOverlay) return
+
+    const refPoses = referencePosesRef.current
+    if (refPoses.length === 0) return
+
+    // Find closest reference pose
+    let closest = refPoses[0]
+    let closestDiff = Math.abs(closest.time - time)
+    for (const rp of refPoses) {
+      const diff = Math.abs(rp.time - time)
+      if (diff < closestDiff) {
+        closestDiff = diff
+        closest = rp
+      }
+    }
+
+    if (closestDiff > 0.5) return
+
+    const alpha = isPaused ? 0.6 : 0.3
+    const color = `rgba(0, 170, 255, ${alpha})`
+
+    // Scale reference keypoints to webcam canvas dimensions
+    // Reference poses are in original video space; scale to canvas
+    const keypoints = closest.keypoints
+
+    ctx.strokeStyle = color
+    ctx.lineWidth = 2
+    for (const [i, j] of SKELETON_CONNECTIONS) {
+      const kpA = keypoints[i]
+      const kpB = keypoints[j]
+      if (kpA && kpB && kpA.score > 0.3 && kpB.score > 0.3) {
+        ctx.beginPath()
+        ctx.moveTo(kpA.x * canvasWidth / 320, kpA.y * canvasHeight / 240)
+        ctx.lineTo(kpB.x * canvasWidth / 320, kpB.y * canvasHeight / 240)
+        ctx.stroke()
+      }
+    }
+
+    ctx.fillStyle = color
+    for (const kp of keypoints) {
+      if (kp.score > 0.3) {
+        ctx.beginPath()
+        ctx.arc(kp.x * canvasWidth / 320, kp.y * canvasHeight / 240, KEYPOINT_RADIUS + 1, 0, 2 * Math.PI)
+        ctx.fill()
+      }
+    }
+  }, [showGhostOverlay])
+
   // Detection loop
   const practiceLoop = useCallback(async () => {
     const video = webcamRef.current
@@ -86,8 +137,12 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
       drawPose(ctx, userPose, canvas.width, canvas.height, '#00ff88')
     }
 
-    // Update time tracking
+    // Draw ghost reference pose overlay and update time tracking
     const refVideo = refVideoRef.current
+    if (refVideo) {
+      drawGhostPose(ctx, refVideo.currentTime, canvas.width, canvas.height, false)
+    }
+
     if (refVideo && refVideo.duration) {
       setCurrentTime(refVideo.currentTime)
       setDuration(refVideo.duration)
@@ -108,7 +163,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     }
 
     animFrameRef.current = requestAnimationFrame(practiceLoop)
-  }, [drawPose, loopStart, loopEnd])
+  }, [drawPose, drawGhostPose, loopStart, loopEnd])
 
   // Load reference poses and initialize
   useEffect(() => {
@@ -302,12 +357,18 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
         drawPose(ctx, userPose, canvas.width, canvas.height, '#00ff88')
       }
 
+      // Draw ghost pose (higher opacity when paused)
+      const refVideo = refVideoRef.current
+      if (refVideo) {
+        drawGhostPose(ctx, refVideo.currentTime, canvas.width, canvas.height, true)
+      }
+
       if (running) requestAnimationFrame(loop)
     }
 
     requestAnimationFrame(loop)
     return () => { running = false }
-  }, [phase, drawPose])
+  }, [phase, drawPose, drawGhostPose])
 
   if (error) {
     return <div className="dance-error">{error}</div>
@@ -497,6 +558,17 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
       {phase === 'playing' && (
         <button className="practice-pause-btn" onClick={pause}>
           Pause
+        </button>
+      )}
+
+      {/* Ghost overlay toggle */}
+      {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
+        <button
+          className={`practice-ghost-toggle ${showGhostOverlay ? 'active' : ''}`}
+          onClick={() => setShowGhostOverlay((v) => !v)}
+          title="Toggle reference pose overlay"
+        >
+          Ghost {showGhostOverlay ? 'ON' : 'OFF'}
         </button>
       )}
     </div>
