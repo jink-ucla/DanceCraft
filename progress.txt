@@ -190,3 +190,26 @@
   - E2e tests can inject DOM elements to verify CSS positioning without needing actual game state
   - `boundingBox()` in Playwright returns absolute page coordinates — compare relative to container
 ---
+
+## 2026-03-14 - US-102
+- Complete UI polish pass across all screens: typography, spacing, colors, visual hierarchy
+- Replaced index.css with forced dark theme using CSS custom properties (--bg-deep, --bg-card, --accent, etc.)
+- Added Inter font via Google Fonts for modern, readable typography
+- Redesigned dance cards with shadows, depth, glow hover effect, image zoom on hover
+- Added consistent button states (hover, active with scale) across all screens
+- Loading overlay now has a CSS spinner animation instead of plain text
+- Countdown uses bigger numbers with glow text-shadow and bounce animation
+- Personal best badge now has accent background pill style
+- Added responsive breakpoints for mobile (768px)
+- All section headers use uppercase + letter-spacing for visual hierarchy
+- Backdrop-filter blur on overlays for depth
+- font-variant-numeric: tabular-nums on all number displays
+- Files changed: src/index.css, src/App.css, prd.json, docs/status.md
+- 88 unit tests + 5 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - index.css was from Vite template with light/dark toggle — replaced entirely with dark-only game theme
+  - CSS custom properties in :root make it easy to maintain consistent design language across all components
+  - Using clamp() for responsive font sizes (e.g., heading) is cleaner than media queries
+  - backdrop-filter: blur() adds polish to overlays but may impact performance on low-end devices
+  - Google Fonts @import in CSS works with Vite — no need for separate HTML link tag
+---
