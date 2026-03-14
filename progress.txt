@@ -28,6 +28,9 @@
 - Delete dance route cleans up associated files (video, audio, poses, thumbnail) from disk
 - File serving routes (/:id/video, /:id/audio, etc.) use fs.createReadStream for streaming; video/audio support Range requests for seeking
 - Webcam recording uses a hidden composite canvas (webcam + skeleton) captured via `captureStream(30)` → MediaRecorder
+- Sessions stored in SQLite `sessions` table with foreign key to `dances`; CRUD in `server/db.ts`
+- Session routes in `server/routes/sessions.ts` — file uploads via multer
+- Session files stored in `data/sessions/{timestamp-random}/` (recording.webm, poses.json)
 - All e2e tests that hit `/` must mock `**/api/dances` GET to avoid backend dependency
 - YouTube thumbnails: `https://img.youtube.com/vi/{videoId}/mqdefault.jpg` — no backend serving needed
 - API dance IDs prefixed with `api-` to distinguish from bundled dance IDs in frontend
@@ -388,4 +391,23 @@
   - MediaRecorder `start(timeslice)` collects data periodically — 1000ms chunks prevent memory buildup
   - The composite canvas must be initialized with webcam dimensions in the init function (not at component mount)
   - Recording cleanup in the unmount effect must check `state !== 'inactive'` before calling `stop()`
+---
+
+## 2026-03-14 - US-301
+- Implemented dance session persistence: SQLite sessions table, REST API, auto-save from frontend
+- Added sessions table with foreign key to dances (CASCADE delete)
+- Created server/routes/sessions.ts with all CRUD routes + file serving + storage stats
+- POST /api/sessions accepts multipart form data (video blob + JSON fields) via multer
+- GET /api/sessions/storage returns total disk usage, MB, and session count
+- DELETE /api/sessions bulk deletes all sessions and cleans up files
+- Frontend auto-saves session to backend after dance finishes (for API dances only)
+- Session save is non-blocking (fetch in background, fails silently — localStorage score history still works)
+- Files changed: server/db.ts, server/routes/sessions.ts (new), server/app.ts, src/App.tsx, package.json, tests/unit/server/sessions-db.test.ts (new), tests/unit/server/sessions-routes.test.ts (new), prd.json, docs/status.md
+- 19 new unit tests (181 total) + 21 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - multer `upload.single('video')` handles multipart file uploads; form fields accessible via `req.body`
+  - Session files organized in `data/sessions/{timestamp-random}/` directories for clean isolation
+  - Foreign key CASCADE delete means deleting a dance auto-deletes its sessions in SQLite
+  - Auto-save only works for API dances (bundled dances have no numeric API ID)
+  - `recordingBlobRef` must be cleared on retry and new dance select to avoid stale data
 ---

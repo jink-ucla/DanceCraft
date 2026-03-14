@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import dancesRouter from './routes/dances.ts'
+import sessionsRouter from './routes/sessions.ts'
 
 dotenv.config()
 
@@ -17,5 +18,6 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.use('/api/dances', dancesRouter)
+app.use('/api/sessions', sessionsRouter)
 
 export default app

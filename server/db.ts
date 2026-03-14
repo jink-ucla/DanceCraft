@@ -61,6 +61,19 @@ export function getDb(): Database.Database {
     )
   `)
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      danceId INTEGER NOT NULL,
+      score REAL NOT NULL DEFAULT 0,
+      rank TEXT NOT NULL DEFAULT 'C',
+      videoPath TEXT,
+      posesPath TEXT,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (danceId) REFERENCES dances(id) ON DELETE CASCADE
+    )
+  `)
+
   return db
 }
 
@@ -132,5 +145,81 @@ export function deleteDance(id: number): boolean {
   const db = getDb()
   const result = db.prepare('DELETE FROM dances WHERE id = ?').run(id)
   return result.changes > 0
+}
+
+// --- Sessions ---
+
+export interface Session {
+  id: number
+  danceId: number
+  score: number
+  rank: string
+  videoPath: string | null
+  posesPath: string | null
+  createdAt: string
+}
+
+export function createSession(data: {
+  danceId: number
+  score: number
+  rank: string
+  videoPath?: string | null
+  posesPath?: string | null
+}): Session {
+  const db = getDb()
+  const stmt = db.prepare(`
+    INSERT INTO sessions (danceId, score, rank, videoPath, posesPath, createdAt)
+    VALUES (@danceId, @score, @rank, @videoPath, @posesPath, datetime('now'))
+  `)
+
+  const result = stmt.run({
+    danceId: data.danceId,
+    score: data.score,
+    rank: data.rank,
+    videoPath: data.videoPath ?? null,
+    posesPath: data.posesPath ?? null,
+  })
+
+  return getSession(Number(result.lastInsertRowid))!
+}
+
+export function getSession(id: number): Session | undefined {
+  const db = getDb()
+  return db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as Session | undefined
+}
+
+export function getAllSessions(): Session[] {
+  const db = getDb()
+  return db.prepare('SELECT * FROM sessions ORDER BY id DESC').all() as Session[]
+}
+
+export function getSessionsByDance(danceId: number): Session[] {
+  const db = getDb()
+  return db.prepare('SELECT * FROM sessions WHERE danceId = ? ORDER BY id DESC').all(danceId) as Session[]
+}
+
+export function deleteSession(id: number): boolean {
+  const db = getDb()
+  const result = db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
+  return result.changes > 0
+}
+
+export function deleteAllSessions(): number {
+  const db = getDb()
+  const result = db.prepare('DELETE FROM sessions').run()
+  return result.changes
+}
+
+export function getSessionsDiskUsage(): number {
+  const sessions = getAllSessions()
+  let totalBytes = 0
+  for (const session of sessions) {
+    for (const filePath of [session.videoPath, session.posesPath]) {
+      if (filePath && fs.existsSync(filePath)) {
+        totalBytes += fs.statSync(filePath).size
+      }
+    }
+  }
+  return totalBytes
 }
 

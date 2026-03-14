@@ -90,6 +90,7 @@ function App() {
   const [dancesError, setDancesError] = useState<string | null>(null)
   const userPosesRef = useRef<TimestampedPose[]>([])
   const referencePosesRef = useRef<TimestampedPose[]>([])
+  const recordingBlobRef = useRef<Blob | null>(null)
 
   const fetchDances = useCallback(async () => {
     setDancesLoading(true)
@@ -138,18 +139,44 @@ function App() {
     )
 
     const scorePct = result.overallScore * 100
+    const rank = computeRank(result.overallScore)
 
-    // Save to score history
+    // Save to score history (localStorage)
     saveScore({
       danceId: view.dance.id,
       danceName: view.dance.title,
       score: scorePct,
-      rank: computeRank(result.overallScore),
+      rank,
       date: new Date().toISOString(),
     })
 
+    // Auto-save session to backend (async, non-blocking)
+    if (view.dance.source === 'api') {
+      const apiId = parseInt(view.dance.id.replace('api-', ''), 10)
+      if (!isNaN(apiId)) {
+        const formData = new FormData()
+        formData.append('danceId', String(apiId))
+        formData.append('score', String(scorePct))
+        formData.append('rank', rank)
+        formData.append('poses', JSON.stringify(userPosesRef.current))
+
+        if (recordingBlobRef.current) {
+          formData.append('video', recordingBlobRef.current, 'recording.webm')
+        }
+
+        fetch(`${API_BASE}/api/sessions`, { method: 'POST', body: formData }).catch(() => {
+          // Session save failed silently — local score history still works
+        })
+      }
+    }
+
+    recordingBlobRef.current = null
     setView({ screen: 'results', dance: view.dance, result })
   }, [view])
+
+  const handleRecordingComplete = useCallback((blob: Blob) => {
+    recordingBlobRef.current = blob
+  }, [])
 
   const handleRecordPose = useCallback((pose: Pose, time: number) => {
     userPosesRef.current.push({ time, pose })
@@ -179,6 +206,7 @@ function App() {
           danceName={view.dance.title}
           onRetry={() => {
             userPosesRef.current = []
+            recordingBlobRef.current = null
             setView({ screen: 'dance', dance: view.dance })
           }}
           onHome={() => setView({ screen: 'home' })}
@@ -195,6 +223,7 @@ function App() {
           referenceVideoUrl={view.dance.videoUrl}
           onFinish={handleDanceFinish}
           onRecordPose={handleRecordPose}
+          onRecordingComplete={handleRecordingComplete}
           onReferencePosesLoaded={(poses) => {
             referencePosesRef.current = poses
           }}
@@ -217,6 +246,7 @@ function App() {
         error={dancesError}
         onSelectDance={(dance) => {
           userPosesRef.current = []
+          recordingBlobRef.current = null
           setView({ screen: 'dance', dance })
         }}
         onDeleteDance={handleDeleteDance}
