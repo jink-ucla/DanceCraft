@@ -411,3 +411,23 @@
   - Auto-save only works for API dances (bundled dances have no numeric API ID)
   - `recordingBlobRef` must be cleared on retry and new dance select to avoid stale data
 ---
+
+## 2026-03-14 - US-302
+- Built ReplayMode component: side-by-side video review with pose overlay and controls
+- Side-by-side layout: reference video (left) and user recording (right) in 16:9 panels
+- Skeleton overlay on user recording colored by section score (green/yellow/red)
+- Color-coded timeline bar with clickable seek and animated playhead
+- Play/pause and playback speed controls (0.5x, 1x, 1.5x, 2x)
+- Session metadata (date, score, rank) displayed in header
+- "Watch Replay" button on ResultsScreen (only when recording exists)
+- Replay navigates back to results screen via Back button
+- View discriminated union extended with `replay` screen type
+- Files changed: src/components/ReplayMode.tsx (new), src/components/ResultsScreen.tsx, src/App.tsx, src/App.css, tests/e2e/replay.spec.ts (new), prd.json, docs/status.md
+- 1 new e2e test (181 unit + 22 e2e), build clean
+- **Learnings for future iterations:**
+  - `URL.createObjectURL(blob)` creates a temporary URL for the recording blob — works for video src attribute
+  - Recording blob must be kept alive until user navigates away from results/replay
+  - Side-by-side video sync: both videos seek together via shared handleSeek function
+  - Pose overlay drawing uses closest-time matching (within 0.5s) to find the right skeleton frame
+  - User video has `scaleX(-1)` for mirror view (matches how it was recorded)
+---

@@ -30,7 +30,7 @@
 
 - US-300: Record user webcam video during dance — **COMPLETE**
 - US-301: Save dance session data — **COMPLETE**
-- US-302: Replay mode — TODO
+- US-302: Replay mode — **COMPLETE**
 
 ## Phases 4-5: Planned
 
@@ -46,7 +46,7 @@ None currently tracked.
 ## Test Summary
 
 - 181 unit tests (Vitest) — all passing
-- 21 e2e tests (Playwright) — all passing
+- 22 e2e tests (Playwright) — all passing
 
 ## Blockers
 
@@ -54,4 +54,4 @@ None currently tracked.
 
 ## What's Next
 
-US-302: Replay mode - review past dance sessions (Phase 3)
+US-400: Practice mode - pause and resume (Phase 4)

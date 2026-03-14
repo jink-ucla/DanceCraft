@@ -1016,6 +1016,17 @@
   box-shadow: var(--shadow-glow);
 }
 
+.results-btn-replay {
+  background: var(--bg-elevated);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.results-btn-replay:hover {
+  background: rgba(0, 255, 136, 0.1);
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.15);
+}
+
 .results-btn-home {
   background: var(--bg-elevated);
   color: var(--text);
@@ -1412,6 +1423,230 @@
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   flex-shrink: 0;
+}
+
+/* ========== REPLAY MODE ========== */
+
+.replay-mode {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.replay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.replay-back-btn {
+  padding: 8px 20px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.replay-back-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+  color: var(--text-heading);
+}
+
+.replay-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.replay-date {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.replay-score {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-rank {
+  font-size: 28px;
+  font-weight: 800;
+  text-shadow: 0 0 20px currentColor;
+}
+
+.replay-videos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.replay-video-panel {
+  position: relative;
+  background: #000;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  aspect-ratio: 16/9;
+}
+
+.replay-video-label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text-white);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 4px;
+  z-index: 5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.replay-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.replay-video-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.replay-user-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.replay-pose-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Timeline */
+.replay-timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.replay-timeline {
+  position: relative;
+  display: flex;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  gap: 1px;
+  cursor: pointer;
+}
+
+.replay-timeline-segment {
+  min-width: 4px;
+  transition: opacity 0.15s;
+}
+
+.replay-timeline-segment:hover {
+  opacity: 0.8;
+}
+
+.replay-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--text-white);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+  z-index: 2;
+  pointer-events: none;
+  transition: left 0.1s linear;
+}
+
+.replay-time-display {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Controls */
+.replay-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.replay-play-btn {
+  padding: 10px 28px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.replay-play-btn:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-glow);
+}
+
+.replay-play-btn:active {
+  transform: scale(0.97);
+}
+
+.replay-speed-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.replay-speed-btn {
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.replay-speed-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-heading);
+}
+
+.replay-speed-btn.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+  font-weight: 600;
 }
 
 /* ========== RESPONSIVE ========== */

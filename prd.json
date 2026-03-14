@@ -493,7 +493,7 @@
       "storyPoints": 8,
       "priority": "high",
       "dependencies": ["US-301"],
-      "passes": false
+      "passes": true
     },
 
     {

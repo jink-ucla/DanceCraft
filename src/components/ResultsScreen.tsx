@@ -5,6 +5,7 @@ interface ResultsScreenProps {
   danceName: string
   onRetry: () => void
   onHome: () => void
+  onReplay?: () => void
 }
 
 const RANK_MESSAGES: Record<string, string> = {
@@ -27,7 +28,7 @@ function scoreToColor(score: number): string {
   return '#ff6b6b' // red
 }
 
-export function ResultsScreen({ result, danceName, onRetry, onHome }: ResultsScreenProps) {
+export function ResultsScreen({ result, danceName, onRetry, onHome, onReplay }: ResultsScreenProps) {
   const pct = Math.round(result.overallScore * 100)
 
   return (
@@ -107,6 +108,11 @@ export function ResultsScreen({ result, danceName, onRetry, onHome }: ResultsScr
         <button className="results-btn results-btn-retry" onClick={onRetry}>
           Try Again
         </button>
+        {onReplay && (
+          <button className="results-btn results-btn-replay" onClick={onReplay}>
+            Watch Replay
+          </button>
+        )}
         <button className="results-btn results-btn-home" onClick={onHome}>
           Home
         </button>

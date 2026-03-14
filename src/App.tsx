@@ -6,6 +6,7 @@ import { ResultsScreen } from './components/ResultsScreen'
 import { Settings } from './components/Settings'
 import { History } from './components/History'
 import { AddDance } from './components/AddDance'
+import { ReplayMode } from './components/ReplayMode'
 import { computePostDanceScore } from './scoring/dtw'
 import { computeRank } from './scoring/dtw'
 import { saveScore } from './storage/scores'
@@ -81,6 +82,7 @@ type View =
   | { screen: 'results'; dance: DanceInfo; result: DTWResult }
   | { screen: 'settings' }
   | { screen: 'history' }
+  | { screen: 'replay'; dance: DanceInfo; result: DTWResult }
 
 function App() {
   const [view, setView] = useState<View>({ screen: 'home' })
@@ -170,7 +172,6 @@ function App() {
       }
     }
 
-    recordingBlobRef.current = null
     setView({ screen: 'results', dance: view.dance, result })
   }, [view])
 
@@ -198,7 +199,32 @@ function App() {
     )
   }
 
+  if (view.screen === 'replay') {
+    const userVideoUrl = recordingBlobRef.current
+      ? URL.createObjectURL(recordingBlobRef.current)
+      : ''
+
+    return (
+      <div className="app">
+        <ReplayMode
+          referenceVideoUrl={view.dance.videoUrl}
+          userVideoUrl={userVideoUrl}
+          userPoses={userPosesRef.current}
+          sectionScores={view.result.sectionScores}
+          sessionMeta={{
+            date: new Date().toISOString(),
+            score: view.result.overallScore * 100,
+            rank: view.result.rank,
+          }}
+          onBack={() => setView({ screen: 'results', dance: view.dance, result: view.result })}
+        />
+      </div>
+    )
+  }
+
   if (view.screen === 'results') {
+    const hasRecording = !!recordingBlobRef.current
+
     return (
       <div className="app">
         <ResultsScreen
@@ -209,7 +235,11 @@ function App() {
             recordingBlobRef.current = null
             setView({ screen: 'dance', dance: view.dance })
           }}
-          onHome={() => setView({ screen: 'home' })}
+          onHome={() => {
+            recordingBlobRef.current = null
+            setView({ screen: 'home' })
+          }}
+          onReplay={hasRecording ? () => setView({ screen: 'replay', dance: view.dance, result: view.result }) : undefined}
         />
       </div>
     )
