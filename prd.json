@@ -262,7 +262,7 @@
       "storyPoints": 2,
       "priority": "critical",
       "dependencies": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-102",
