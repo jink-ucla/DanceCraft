@@ -552,3 +552,14 @@
 - Files changed: tests/e2e/replay.spec.ts (rewritten), prd.json, docs/status.md
 - 181 unit + 52 e2e tests passing, build clean
 ---
+
+## 2026-03-14 - US-505
+- Established visual regression test baselines for all major screens
+- 13 baseline screenshots: home (bundled, API, error), settings, history, dance (loading, countdown, HUD, finished), results, replay, practice (playing, paused)
+- Baselines stored in tests/e2e/visual-baseline.spec.ts-snapshots/
+- Update baselines with: `npx playwright test tests/e2e/visual-baseline.spec.ts --update-snapshots`
+- Threshold: maxDiffPixelRatio 0.01, threshold 0.2 (anti-aliasing tolerant)
+- Files changed: tests/e2e/visual-baseline.spec.ts (new), tests/e2e/visual-baseline.spec.ts-snapshots/ (new), prd.json, docs/status.md
+- 181 unit + 65 e2e tests passing, build clean
+- ALL 35 USER STORIES COMPLETE (US-001 through US-505)
+---

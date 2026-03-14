@@ -696,7 +696,7 @@
       "storyPoints": 3,
       "priority": "medium",
       "dependencies": ["US-501", "US-502"],
-      "passes": false
+      "passes": true
     }
   ]
 }
