@@ -16,7 +16,8 @@
       ],
       "storyPoints": 2,
       "priority": "critical",
-      "dependencies": []
+      "dependencies": [],
+      "passes": true
     },
     {
       "id": "US-002",

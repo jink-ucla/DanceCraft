@@ -1,3 +1,18 @@
 ## Codebase Patterns
+- Vitest config lives in `vite.config.ts` under `test` key; e2e tests excluded via `exclude: ['tests/e2e/**']`
+- Unit tests go in `tests/unit/`, e2e tests in `tests/e2e/`
+- Playwright uses chromium only, dev server auto-started via `webServer` config
+- TypeScript strict mode enabled in `tsconfig.app.json`
 
+---
+
+## 2026-03-14 - US-001
+- Scaffolded Vite + React + TypeScript project
+- Added Vitest for unit tests, Playwright for e2e tests
+- Created placeholder tests for both frameworks
+- Files changed: package.json, vite.config.ts, tsconfig.json, tsconfig.app.json, tsconfig.node.json, eslint.config.js, playwright.config.ts, index.html, src/*, tests/unit/placeholder.test.ts, tests/e2e/placeholder.spec.ts, .gitignore
+- **Learnings for future iterations:**
+  - Vite scaffolder won't run in non-empty directories — scaffold in /tmp and copy over
+  - Must exclude `tests/e2e/**` from Vitest or Playwright's `test()` conflicts with Vitest
+  - Playwright needs `npx playwright install chromium` after npm install
 ---
