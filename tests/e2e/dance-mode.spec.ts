@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test'
 
 test('feedback displays in bottom-left corner, not center', async ({ page }) => {
+  // Mock API to return empty so bundled dances load quickly
+  await page.route('**/api/dances', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+  })
   await page.goto('/')
   await page.locator('.dance-card').first().click()
   await expect(page.locator('.dance-mode')).toBeVisible()
@@ -34,6 +38,9 @@ test('feedback displays in bottom-left corner, not center', async ({ page }) => 
 })
 
 test('clicking dance card navigates to dance mode', async ({ page }) => {
+  await page.route('**/api/dances', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+  })
   await page.goto('/')
 
   // Click the first dance card

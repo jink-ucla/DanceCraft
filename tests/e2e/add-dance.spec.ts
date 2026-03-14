@@ -1,6 +1,17 @@
 import { test, expect } from '@playwright/test'
 
 test.describe('Add Dance flow', () => {
+  test.beforeEach(async ({ page }) => {
+    // Mock GET /api/dances to return empty so bundled dances load quickly
+    await page.route('**/api/dances', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+      } else {
+        await route.continue()
+      }
+    })
+  })
+
   test('opens add dance modal from home screen', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByText('+ Add Dance')).toBeVisible()

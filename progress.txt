@@ -26,6 +26,9 @@
 - DB path configurable via `DB_PATH` env var — tests use unique temp DB files to avoid cross-test contamination
 - `getDb()` reads `DB_PATH` from env at call time (not module load) — needed for test isolation
 - Delete dance route cleans up associated files (video, audio, poses, thumbnail) from disk
+- All e2e tests that hit `/` must mock `**/api/dances` GET to avoid backend dependency
+- YouTube thumbnails: `https://img.youtube.com/vi/{videoId}/mqdefault.jpg` — no backend serving needed
+- API dance IDs prefixed with `api-` to distinguish from bundled dance IDs in frontend
 
 ---
 
@@ -323,4 +326,27 @@
   - Poll count tracking in route handlers (via closure variable) allows testing state transitions (processing → complete)
   - Modal backdrop click-to-close needs `e.stopPropagation()` on the inner modal to prevent clicks inside from closing
   - `apiBase` prop with default allows e2e tests to work with route mocking (tests intercept `**/api/dances/process` pattern)
+---
+
+## 2026-03-14 - US-204
+- Replaced hardcoded AVAILABLE_DANCES with dynamic loading from GET /api/dances
+- API dances converted to DanceInfo format with YouTube CDN thumbnails (no backend serving needed)
+- Bundled dances (sample-dance, ive-cover) still appear alongside API dances
+- Falls back to bundled dances only when backend is unreachable (with error message)
+- Added loading skeleton animation while fetching dances
+- Added empty state with "Add your first dance!" prompt
+- Added error state with red banner when backend unreachable
+- Added delete button on API dance cards with two-click confirmation (click once → "Confirm?" → click again → delete)
+- Delete button only appears on API dances, not bundled dances
+- onDanceAdded callback now triggers refetch of dance list from API
+- Updated all existing e2e tests to mock GET /api/dances to avoid backend dependency
+- 8 new e2e tests for dynamic library behavior
+- Files changed: src/components/HomeScreen.tsx, src/App.tsx, src/App.css, tests/e2e/dynamic-library.spec.ts (new), tests/e2e/placeholder.spec.ts, tests/e2e/dance-mode.spec.ts, tests/e2e/settings.spec.ts, tests/e2e/add-dance.spec.ts, prd.json, docs/status.md
+- 145 unit tests + 21 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - YouTube video thumbnails at `img.youtube.com/vi/{id}/mqdefault.jpg` are publicly accessible — good fallback before US-205 serving endpoints
+  - Prefixing API dance IDs with `api-` prevents collisions with bundled dance IDs
+  - Delete confirmation uses React state (`deleteConfirm`) tracking which card is in confirm mode — resets on second click or when another card is clicked
+  - All e2e tests navigating to home must mock `**/api/dances` GET — otherwise they depend on the backend being up
+  - Glob pattern `**/api/dances` does NOT match `**/api/dances/process` in Playwright route matching — patterns are exact
 ---
