@@ -5,6 +5,7 @@ import { DanceMode } from './components/DanceMode'
 import { ResultsScreen } from './components/ResultsScreen'
 import { Settings } from './components/Settings'
 import { History } from './components/History'
+import { AddDance } from './components/AddDance'
 import { computePostDanceScore } from './scoring/dtw'
 import { computeRank } from './scoring/dtw'
 import { saveScore } from './storage/scores'
@@ -13,6 +14,13 @@ import type { Pose } from './scoring/types'
 import './App.css'
 
 const AVAILABLE_DANCES: DanceInfo[] = [
+  {
+    id: 'ive-cover',
+    title: 'IVE Dance Cover',
+    poseDataUrl: '/dances/ive-cover.json',
+    videoUrl: '/dances/ive-cover.mp4',
+    duration: '3:09',
+  },
   {
     id: 'sample-dance',
     title: 'Sample Dance',
@@ -30,6 +38,7 @@ type View =
 
 function App() {
   const [view, setView] = useState<View>({ screen: 'home' })
+  const [showAddDance, setShowAddDance] = useState(false)
   const userPosesRef = useRef<TimestampedPose[]>([])
   const referencePosesRef = useRef<TimestampedPose[]>([])
 
@@ -96,6 +105,7 @@ function App() {
       <div className="app">
         <DanceMode
           referencePoseUrl={view.dance.poseDataUrl}
+          referenceVideoUrl={view.dance.videoUrl}
           onFinish={handleDanceFinish}
           onRecordPose={handleRecordPose}
           onReferencePosesLoaded={(poses) => {
@@ -122,7 +132,16 @@ function App() {
         }}
         onSettings={() => setView({ screen: 'settings' })}
         onHistory={() => setView({ screen: 'history' })}
+        onAddDance={() => setShowAddDance(true)}
       />
+      {showAddDance && (
+        <AddDance
+          onClose={() => setShowAddDance(false)}
+          onDanceAdded={() => {
+            // TODO: US-204 will reload dances from API
+          }}
+        />
+      )}
     </div>
   )
 }

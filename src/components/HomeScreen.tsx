@@ -5,6 +5,7 @@ export interface DanceInfo {
   title: string
   thumbnail?: string
   poseDataUrl: string
+  videoUrl?: string
   duration: string
 }
 
@@ -13,6 +14,8 @@ interface HomeScreenProps {
   onSelectDance: (dance: DanceInfo) => void
   onSettings?: () => void
   onHistory?: () => void
+  onAddDance?: () => void
+  processingCount?: number
 }
 
 function getPersonalBest(danceId: string): number | null {
@@ -20,7 +23,7 @@ function getPersonalBest(danceId: string): number | null {
   return stored ? JSON.parse(stored) : null
 }
 
-export function HomeScreen({ dances, onSelectDance, onSettings, onHistory }: HomeScreenProps) {
+export function HomeScreen({ dances, onSelectDance, onSettings, onHistory, onAddDance, processingCount = 0 }: HomeScreenProps) {
   const [bests, setBests] = useState<Record<string, number | null>>({})
 
   useEffect(() => {
@@ -37,6 +40,11 @@ export function HomeScreen({ dances, onSelectDance, onSettings, onHistory }: Hom
         <h1>Groovy</h1>
         <p className="home-subtitle">Dance along to any video with real-time pose feedback</p>
         <div className="home-nav-buttons">
+          {onAddDance && (
+            <button className="home-nav-btn home-add-btn" onClick={onAddDance}>
+              + Add Dance
+            </button>
+          )}
           {onHistory && (
             <button className="home-nav-btn" onClick={onHistory}>
               History
@@ -49,6 +57,13 @@ export function HomeScreen({ dances, onSelectDance, onSettings, onHistory }: Hom
           )}
         </div>
       </header>
+
+      {processingCount > 0 && (
+        <div className="home-processing-indicator">
+          <div className="home-processing-spinner" />
+          <span>{processingCount} dance{processingCount > 1 ? 's' : ''} processing...</span>
+        </div>
+      )}
 
       <div className="dance-cards">
         {dances.map((dance) => (

@@ -307,3 +307,20 @@
   - WAL mode enabled for better concurrent read performance
   - Delete route order matters in Express: put specific routes (/process, /jobs/:id) before parametric (/:id)
 ---
+
+## 2026-03-14 - US-203
+- Implemented Add Dance UI: modal with YouTube URL input, processing progress, success/error states
+- Created AddDance component with URL validation, polling for job status, and all four states (input/processing/success/error)
+- Added "+ Add Dance" button to HomeScreen with accent styling
+- Added processing indicator component to HomeScreen (spinner + count)
+- Wired AddDance modal into App.tsx with show/hide state
+- 7 new e2e tests covering: modal open/close, URL validation, mocked API processing flow, error states, server connection error
+- Files changed: src/components/AddDance.tsx (new), src/components/HomeScreen.tsx, src/App.tsx, src/App.css, tests/e2e/add-dance.spec.ts (new), prd.json, docs/status.md
+- 145 unit tests + 12 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - Playwright `page.route()` is ideal for mocking backend API in e2e tests — intercept requests and return custom JSON responses
+  - `route.abort('connectionrefused')` simulates server down for network error testing
+  - Poll count tracking in route handlers (via closure variable) allows testing state transitions (processing → complete)
+  - Modal backdrop click-to-close needs `e.stopPropagation()` on the inner modal to prevent clicks inside from closing
+  - `apiBase` prop with default allows e2e tests to work with route mocking (tests intercept `**/api/dances/process` pattern)
+---
