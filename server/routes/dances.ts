@@ -80,6 +80,112 @@ router.get('/:id', (req, res) => {
   res.json(dance)
 })
 
+// Serve dance video file with Range request support
+router.get('/:id/video', (req, res) => {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid dance ID' }); return }
+
+  const dance = getDance(id)
+  if (!dance) { res.status(404).json({ error: 'Dance not found' }); return }
+  if (!dance.videoPath || !fs.existsSync(dance.videoPath)) {
+    res.status(404).json({ error: 'Video file not found' }); return
+  }
+
+  const stat = fs.statSync(dance.videoPath)
+  const fileSize = stat.size
+  const range = req.headers.range
+
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-')
+    const start = parseInt(parts[0], 10)
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+    const chunkSize = end - start + 1
+
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunkSize,
+      'Content-Type': 'video/mp4',
+    })
+    fs.createReadStream(dance.videoPath, { start, end }).pipe(res)
+  } else {
+    res.writeHead(200, {
+      'Content-Length': fileSize,
+      'Content-Type': 'video/mp4',
+      'Accept-Ranges': 'bytes',
+    })
+    fs.createReadStream(dance.videoPath).pipe(res)
+  }
+})
+
+// Serve dance audio file with Range request support
+router.get('/:id/audio', (req, res) => {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid dance ID' }); return }
+
+  const dance = getDance(id)
+  if (!dance) { res.status(404).json({ error: 'Dance not found' }); return }
+  if (!dance.audioPath || !fs.existsSync(dance.audioPath)) {
+    res.status(404).json({ error: 'Audio file not found' }); return
+  }
+
+  const stat = fs.statSync(dance.audioPath)
+  const fileSize = stat.size
+  const range = req.headers.range
+
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-')
+    const start = parseInt(parts[0], 10)
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+    const chunkSize = end - start + 1
+
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunkSize,
+      'Content-Type': 'audio/mpeg',
+    })
+    fs.createReadStream(dance.audioPath, { start, end }).pipe(res)
+  } else {
+    res.writeHead(200, {
+      'Content-Length': fileSize,
+      'Content-Type': 'audio/mpeg',
+      'Accept-Ranges': 'bytes',
+    })
+    fs.createReadStream(dance.audioPath).pipe(res)
+  }
+})
+
+// Serve dance pose data JSON
+router.get('/:id/poses', (req, res) => {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid dance ID' }); return }
+
+  const dance = getDance(id)
+  if (!dance) { res.status(404).json({ error: 'Dance not found' }); return }
+  if (!dance.poseDataPath || !fs.existsSync(dance.poseDataPath)) {
+    res.status(404).json({ error: 'Pose data not found' }); return
+  }
+
+  res.setHeader('Content-Type', 'application/json')
+  fs.createReadStream(dance.poseDataPath).pipe(res)
+})
+
+// Serve dance thumbnail image
+router.get('/:id/thumbnail', (req, res) => {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid dance ID' }); return }
+
+  const dance = getDance(id)
+  if (!dance) { res.status(404).json({ error: 'Dance not found' }); return }
+  if (!dance.thumbnailPath || !fs.existsSync(dance.thumbnailPath)) {
+    res.status(404).json({ error: 'Thumbnail not found' }); return
+  }
+
+  res.setHeader('Content-Type', 'image/jpeg')
+  fs.createReadStream(dance.thumbnailPath).pipe(res)
+})
+
 // Delete dance and associated files
 router.delete('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10)

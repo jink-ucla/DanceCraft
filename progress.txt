@@ -26,6 +26,7 @@
 - DB path configurable via `DB_PATH` env var — tests use unique temp DB files to avoid cross-test contamination
 - `getDb()` reads `DB_PATH` from env at call time (not module load) — needed for test isolation
 - Delete dance route cleans up associated files (video, audio, poses, thumbnail) from disk
+- File serving routes (/:id/video, /:id/audio, etc.) use fs.createReadStream for streaming; video/audio support Range requests for seeking
 - All e2e tests that hit `/` must mock `**/api/dances` GET to avoid backend dependency
 - YouTube thumbnails: `https://img.youtube.com/vi/{videoId}/mqdefault.jpg` — no backend serving needed
 - API dance IDs prefixed with `api-` to distinguish from bundled dance IDs in frontend
@@ -349,4 +350,21 @@
   - Delete confirmation uses React state (`deleteConfirm`) tracking which card is in confirm mode — resets on second click or when another card is clicked
   - All e2e tests navigating to home must mock `**/api/dances` GET — otherwise they depend on the backend being up
   - Glob pattern `**/api/dances` does NOT match `**/api/dances/process` in Playwright route matching — patterns are exact
+---
+
+## 2026-03-14 - US-205
+- Added backend routes to serve processed video, audio, pose data, and thumbnail files
+- GET /api/dances/:id/video serves video with Range request support (206 Partial Content for seeking)
+- GET /api/dances/:id/audio serves audio with Range request support
+- GET /api/dances/:id/poses serves pose data JSON with application/json Content-Type
+- GET /api/dances/:id/thumbnail serves thumbnail with image/jpeg Content-Type
+- Frontend already wired up: apiDanceToDanceInfo() constructs API URLs for poseDataUrl and videoUrl
+- Bundled dances continue to use static /dances/ paths (no change needed)
+- Files changed: server/routes/dances.ts, tests/unit/server/dances-serving.test.ts (new), prd.json, docs/status.md
+- 12 new unit tests (157 total) + 21 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - Supertest returns binary content in `res.body` (Buffer), not `res.text` for streamed responses with non-text Content-Types
+  - Range request: parse `bytes=start-end` from header, return 206 with Content-Range header, stream partial file via createReadStream({ start, end })
+  - Express route order matters: sub-resource routes (/:id/video, /:id/poses) must be declared before the parametric /:id catch-all
+  - The frontend was already prepared for API serving — apiDanceToDanceInfo() in App.tsx maps API dances to URLs like `${API_BASE}/api/dances/${id}/video`
 ---

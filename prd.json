@@ -430,7 +430,7 @@
       "storyPoints": 3,
       "priority": "high",
       "dependencies": ["US-201", "US-202"],
-      "passes": false
+      "passes": true
     },
 
     {
