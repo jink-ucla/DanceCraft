@@ -39,9 +39,14 @@
 - US-402: Practice mode - section looping — **COMPLETE**
 - US-403: Practice mode - target pose overlay — **COMPLETE**
 
-## Phase 5: Planned
+## Phase 5: Testing & Quality (IN PROGRESS)
 
-- Phase 5: Testing & Quality (6 stories)
+- US-500: Playwright e2e test infrastructure overhaul — **COMPLETE**
+- US-501: E2e tests - home screen and navigation — TODO
+- US-502: E2e tests - dance mode lifecycle — TODO
+- US-503: E2e tests - practice mode — TODO
+- US-504: E2e tests - recording and replay — TODO
+- US-505: Visual regression test baseline — TODO
 
 See `prd.json` for full story details and `docs/roadmap.md` for the phased plan.
 
@@ -60,4 +65,4 @@ None currently tracked.
 
 ## What's Next
 
-US-500: Playwright e2e test infrastructure overhaul (Phase 5)
+US-501: E2e tests - home screen and navigation (Phase 5)

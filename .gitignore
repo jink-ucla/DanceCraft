@@ -1,6 +1,8 @@
 node_modules
 dist
 test-results
+tests/e2e/test-results
+tests/e2e/html-report
 playwright-report
 *.tsbuildinfo
 .env
