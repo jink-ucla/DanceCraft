@@ -60,3 +60,17 @@
   - yt-dlp `--match-filter` can enforce max duration at download time
   - Schema test validates: field presence, types, ranges, keypoint count (17), timestamp ordering
 ---
+
+## 2026-03-14 - US-005
+- Implemented key pose detection algorithm with three detection strategies
+- Detects: held positions (low velocity), sharp transitions (high→low velocity), distinctive poses (deviation from neutral)
+- Each key pose includes timestamp, expected pose data, type, and tolerance threshold
+- Configurable via KeyPoseConfig: sensitivity thresholds, min gap, tolerance multiplier
+- Files changed: src/scoring/keyPoseDetection.ts, src/scoring/index.ts, tests/unit/scoring/keyPoseDetection.test.ts
+- 18 new unit tests (3 angular velocity, 4 distinctiveness, 11 key pose detection)
+- **Learnings for future iterations:**
+  - Key pose density controlled primarily by `minGapSeconds` — 3s gap gives ~10-20/min with varied choreography
+  - Three detection types have different tolerance defaults: held (0.25), transition (0.3), distinctive (0.2) — transition is most generous because timing is hardest
+  - `computeAngularVelocity` is average per-joint angular change — good proxy for "how much did the pose change"
+  - Neutral angle map approximates standing pose — elbows/knees at PI (straight), shoulders at ~0.1*PI (arms at sides)
+---
