@@ -554,7 +554,7 @@
       "storyPoints": 5,
       "priority": "medium",
       "dependencies": ["US-401"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-403",

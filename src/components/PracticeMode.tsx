@@ -28,6 +28,10 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [error, setError] = useState('')
+  const [loopStart, setLoopStart] = useState<number | null>(null)
+  const [loopEnd, setLoopEnd] = useState<number | null>(null)
+  const [loopCount, setLoopCount] = useState(0)
+  const [playbackSpeed, setPlaybackSpeed] = useState(1)
 
   // Reference pose data for ghost overlay
   const referencePosesRef = useRef<{ time: number; keypoints: Keypoint[] }[]>([])
@@ -89,6 +93,14 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
       setDuration(refVideo.duration)
     }
 
+    // Check loop boundaries
+    if (refVideo && loopStart !== null && loopEnd !== null) {
+      if (refVideo.currentTime >= loopEnd) {
+        refVideo.currentTime = loopStart
+        setLoopCount((c) => c + 1)
+      }
+    }
+
     // Check if video ended
     if (refVideo && refVideo.ended) {
       setPhase('paused')
@@ -96,7 +108,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     }
 
     animFrameRef.current = requestAnimationFrame(practiceLoop)
-  }, [drawPose])
+  }, [drawPose, loopStart, loopEnd])
 
   // Load reference poses and initialize
   useEffect(() => {
@@ -251,12 +263,22 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
         e.preventDefault()
         const step = e.shiftKey ? 1 : 5
         seekTo(currentTime - step)
+      } else if (e.code === 'KeyA') {
+        // Set loop start point
+        setLoopStart(currentTime)
+        setLoopCount(0)
+      } else if (e.code === 'KeyB') {
+        // Set loop end point (minimum 3 seconds from start)
+        if (loopStart !== null && currentTime - loopStart >= 3) {
+          setLoopEnd(currentTime)
+          setLoopCount(0)
+        }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [phase, pause, startResume, currentTime, seekTo])
+  }, [phase, pause, startResume, currentTime, seekTo, loopStart])
 
   // Keep detection loop running during pause (webcam stays active)
   useEffect(() => {
@@ -345,6 +367,16 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
                 className="practice-scrubber-fill"
                 style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
               />
+              {/* Loop section highlight */}
+              {duration > 0 && loopStart !== null && loopEnd !== null && (
+                <div
+                  className="practice-scrubber-loop"
+                  style={{
+                    left: `${(loopStart / duration) * 100}%`,
+                    width: `${((loopEnd - loopStart) / duration) * 100}%`,
+                  }}
+                />
+              )}
               {/* Key pose markers */}
               {duration > 0 && keyPoseTimestamps.map((t, i) => (
                 <div
@@ -363,6 +395,59 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
           </div>
           <div className="practice-scrubber-time">
             {duration > 0 ? `${formatTime(currentTime)} / ${formatTime(duration)}` : ''}
+          </div>
+        </div>
+      )}
+
+      {/* Loop & speed controls */}
+      {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
+        <div className="practice-loop-controls">
+          <button
+            className={`practice-loop-btn ${loopStart !== null ? 'active' : ''}`}
+            onClick={() => { setLoopStart(currentTime); setLoopCount(0) }}
+            title="Set loop start (A)"
+          >
+            A {loopStart !== null ? formatTime(loopStart) : ''}
+          </button>
+          <button
+            className={`practice-loop-btn ${loopEnd !== null ? 'active' : ''}`}
+            onClick={() => {
+              if (loopStart !== null && currentTime - loopStart >= 3) {
+                setLoopEnd(currentTime)
+                setLoopCount(0)
+              }
+            }}
+            disabled={loopStart === null}
+            title="Set loop end (B)"
+          >
+            B {loopEnd !== null ? formatTime(loopEnd) : ''}
+          </button>
+          {(loopStart !== null || loopEnd !== null) && (
+            <button
+              className="practice-loop-btn practice-loop-clear"
+              onClick={() => { setLoopStart(null); setLoopEnd(null); setLoopCount(0) }}
+              title="Clear loop"
+            >
+              Clear Loop
+            </button>
+          )}
+          {loopStart !== null && loopEnd !== null && (
+            <span className="practice-loop-count">Loop #{loopCount + 1}</span>
+          )}
+          <div className="practice-speed-controls">
+            {[0.5, 0.75, 1].map((speed) => (
+              <button
+                key={speed}
+                className={`practice-speed-btn ${playbackSpeed === speed ? 'active' : ''}`}
+                onClick={() => {
+                  setPlaybackSpeed(speed)
+                  const refVideo = refVideoRef.current
+                  if (refVideo) refVideo.playbackRate = speed
+                }}
+              >
+                {speed}x
+              </button>
+            ))}
           </div>
         </div>
       )}

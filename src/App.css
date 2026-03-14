@@ -1569,6 +1569,99 @@
   border-color: rgba(0, 136, 255, 0.5);
 }
 
+/* Practice loop & speed controls */
+.practice-loop-controls {
+  position: absolute;
+  bottom: 68px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 15;
+}
+
+.practice-loop-btn {
+  padding: 4px 12px;
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.practice-loop-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.practice-loop-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.practice-loop-btn.active {
+  border-color: #00aaff;
+  color: #00aaff;
+}
+
+.practice-loop-clear {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.practice-loop-count {
+  font-size: 12px;
+  color: #00aaff;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.practice-speed-controls {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.practice-speed-btn {
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.practice-speed-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.practice-speed-btn.active {
+  background: #00aaff;
+  color: #000;
+  border-color: #00aaff;
+  font-weight: 600;
+}
+
+/* Practice scrubber loop highlight */
+.practice-scrubber-loop {
+  position: absolute;
+  top: -2px;
+  height: 10px;
+  background: rgba(0, 170, 255, 0.2);
+  border: 1px solid rgba(0, 170, 255, 0.4);
+  border-radius: 2px;
+  z-index: 1;
+}
+
 /* Practice scrubber / timeline */
 .practice-scrubber-container {
   position: absolute;
