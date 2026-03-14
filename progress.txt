@@ -5,6 +5,9 @@
 - TypeScript strict mode enabled in `tsconfig.app.json`
 - Scoring library lives in `src/scoring/` with barrel export via `index.ts`
 - Test fixtures for poses go in `tests/unit/scoring/fixtures.ts` — use `makePose()` helper for partial keypoint data
+- Pose estimation module lives in `src/pose/` with barrel export via `index.ts`
+- TF.js MoveNet uses `@tensorflow-models/pose-detection` — must externalize `@mediapipe/pose` in Vite build config (unused with MoveNet)
+- React components go in `src/components/`
 
 ---
 
@@ -28,4 +31,18 @@
   - MIN_CONFIDENCE threshold of 0.3 filters low-quality keypoints; joints with any sub-threshold keypoint are skipped entirely
   - Standing vs T-pose elbow angles are more similar than expected (both nearly straight) — test assertions should account for this
   - Use `makePose()` in fixtures to avoid manually specifying all 17 keypoints
+---
+
+## 2026-03-14 - US-002
+- Implemented webcam feed with real-time MoveNet Lightning pose estimation
+- Created pose estimation detector wrapper, normalization functions, skeleton renderer
+- Built WebcamPose React component with canvas overlay, FPS counter, and error handling
+- Files changed: package.json, vite.config.ts, src/pose/detector.ts, src/pose/normalization.ts, src/pose/skeleton.ts, src/pose/index.ts, src/components/WebcamPose.tsx, src/App.tsx, src/App.css, tests/unit/pose/normalization.test.ts
+- 13 new unit tests (normalization: 6 normalizePose, 3 normalizeToVideoDimensions, 4 filterLowConfidence)
+- **Learnings for future iterations:**
+  - `@tensorflow-models/pose-detection` pulls in `@mediapipe/pose` as dependency but it's unused with MoveNet — must mark as external in Vite build config
+  - MoveNet returns pixel-space coordinates — normalize with video dimensions before comparison
+  - WebRTC getUserMedia errors: NotAllowedError (denied), NotFoundError (no camera) — handle both distinctly
+  - Canvas overlay must match video dimensions and use `pointer-events: none` to not block video interactions
+  - Mirror mode (scaleX(-1)) applied to both video and canvas for natural selfie-view
 ---
