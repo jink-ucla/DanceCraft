@@ -528,3 +528,12 @@
 - Files changed: tests/e2e/home-navigation.spec.ts (new), prd.json, docs/status.md
 - 181 unit + 36 e2e tests passing, build clean
 ---
+
+## 2026-03-14 - US-502
+- Comprehensive dance mode lifecycle e2e tests (7 tests)
+- Tests: loading state, HUD display, feedback position, countdown, finished overlay, results screen, back button
+- DOM injection technique to test CSS/structure without needing webcam/pose estimation
+- Screenshots at each phase transition
+- Files changed: tests/e2e/dance-lifecycle.spec.ts (new), prd.json, docs/status.md
+- 181 unit + 43 e2e tests passing, build clean
+---
