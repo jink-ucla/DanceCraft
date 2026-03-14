@@ -22,6 +22,10 @@
 - Job manager (`server/jobs.ts`) is in-memory — use for async processing tracking
 - Processing pipeline (`server/processing.ts`) shells out to yt-dlp, ffmpeg, and Python scripts
 - Processed dance data stored in `data/dances/{jobId}/` (video.mp4, audio.mp3, poses.json, thumbnail.jpg)
+- SQLite database via `better-sqlite3` — `server/db.ts` exports CRUD functions, DB auto-creates at `data/groovy.db`
+- DB path configurable via `DB_PATH` env var — tests use unique temp DB files to avoid cross-test contamination
+- `getDb()` reads `DB_PATH` from env at call time (not module load) — needed for test isolation
+- Delete dance route cleans up associated files (video, audio, poses, thumbnail) from disk
 
 ---
 
@@ -284,4 +288,22 @@
   - Mock vi.mock for processing.ts in route tests to avoid needing yt-dlp/ffmpeg installed in CI
   - POST returns 202 (Accepted) not 200 since processing is async
   - extract_poses.py takes a local video path as first positional arg (not YouTube URL) when called from the backend
+---
+
+## 2026-03-14 - US-202
+- Implemented SQLite dance library database and CRUD REST API
+- Created server/db.ts with better-sqlite3: auto-creating database, CRUD functions (createDance, getDance, getAllDances, updateDance, deleteDance)
+- Added REST routes: GET /api/dances (list), GET /api/dances/:id (single), DELETE /api/dances/:id (remove + cleanup files)
+- Wired processing pipeline to save completed jobs to database automatically
+- DELETE endpoint cleans up associated files (video, audio, poses, thumbnail) from disk
+- Database auto-creates on first run at data/groovy.db (configurable via DB_PATH env var)
+- Files changed: server/db.ts (new), server/routes/dances.ts, server/processing.ts, package.json, tests/unit/server/db.test.ts (new), tests/unit/server/dances-crud.test.ts (new), prd.json, docs/status.md
+- 24 new unit tests (145 total) + 5 e2e tests passing, build clean
+- **Learnings for future iterations:**
+  - better-sqlite3 is synchronous — no async/await needed for DB operations
+  - DB_PATH must be read dynamically in getDb() (not at module load) so test isolation works with process.env changes
+  - SQLite datetime('now') has second-level resolution — multiple inserts in same second get identical timestamps; use `id DESC` for reliable ordering
+  - Tests need unique DB file paths (use Date.now + random) to avoid cross-test contamination in parallel Vitest runs
+  - WAL mode enabled for better concurrent read performance
+  - Delete route order matters in Express: put specific routes (/process, /jobs/:id) before parametric (/:id)
 ---

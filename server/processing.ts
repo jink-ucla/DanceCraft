@@ -3,6 +3,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { updateJob } from './jobs.ts'
 import type { Job } from './jobs.ts'
+import { createDance, updateDance } from './db.ts'
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data', 'dances')
 
@@ -175,6 +176,21 @@ export async function processJob(job: Job): Promise<void> {
     // Step 5: Extract poses
     updateJob(job.id, { status: 'extracting_poses', progress: 'Extracting poses (this may take a while)...' })
     const posesPath = await extractPoses(videoPath, dir)
+
+    // Save to database
+    const dance = createDance({
+      youtubeUrl: job.youtubeUrl,
+      title: metadata.title,
+      duration: metadata.duration,
+      channel: metadata.channel,
+      status: 'complete',
+    })
+    updateDance(dance.id, {
+      videoPath,
+      audioPath,
+      poseDataPath: posesPath,
+      thumbnailPath,
+    })
 
     // Complete
     updateJob(job.id, {

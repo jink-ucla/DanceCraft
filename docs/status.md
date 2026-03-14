@@ -21,7 +21,7 @@
 
 - US-200: Backend API server setup — **COMPLETE**
 - US-201: YouTube video download and processing API — **COMPLETE**
-- US-202: Dance library database and CRUD API — TODO
+- US-202: Dance library database and CRUD API — **COMPLETE**
 - US-203: Add Dance UI — TODO
 - US-204: Dynamic dance library UI — TODO
 - US-205: Serve processed video/audio from backend — TODO
@@ -40,7 +40,7 @@ None currently tracked.
 
 ## Test Summary
 
-- 121 unit tests (Vitest) — all passing
+- 145 unit tests (Vitest) — all passing
 - 5 e2e tests (Playwright) — all passing
 
 ## Blockers
@@ -49,4 +49,4 @@ None currently tracked.
 
 ## What's Next
 
-US-202: Dance library database and CRUD API (Phase 2)
+US-203: Add Dance UI - YouTube URL input and processing flow (Phase 2)
