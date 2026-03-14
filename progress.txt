@@ -128,3 +128,15 @@
   - Pose recording during dance via onRecordPose callback — avoids coupling DanceMode to DTW scoring
   - Timeline segments sized by flex proportional to time range — natural visualization of section lengths
 ---
+
+## 2026-03-14 - US-010
+- Created Settings component with webcam selection, scoring sensitivity, mirror mode toggle
+- Settings persist to localStorage via `groovy_settings` key
+- Added settings navigation from home screen
+- Files changed: src/components/Settings.tsx, src/components/HomeScreen.tsx, src/App.tsx, src/App.css, tests/e2e/settings.spec.ts
+- 1 new e2e test (settings page loads, webcam dropdown, sensitivity radios, mirror toggle, back navigation)
+- **Learnings for future iterations:**
+  - Settings stored as JSON object under single `groovy_settings` localStorage key
+  - `loadSettings()` and `saveSettings()` exported from Settings.tsx for use by other components
+  - Camera enumeration requires getUserMedia call first to get labeled device names
+---

@@ -277,6 +277,21 @@
   font-size: 16px;
 }
 
+.home-settings-btn {
+  margin-top: 12px;
+  padding: 6px 16px;
+  background: #333;
+  color: #ccc;
+  border: 1px solid #555;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.home-settings-btn:hover {
+  background: #444;
+}
+
 .dance-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -507,5 +522,67 @@
 }
 
 .results-btn-home:hover {
+  background: #444;
+}
+
+/* Settings Screen */
+.settings-screen {
+  width: 100%;
+  max-width: 500px;
+}
+
+.settings-screen h2 {
+  font-size: 24px;
+  margin-bottom: 24px;
+}
+
+.settings-section {
+  margin-bottom: 20px;
+}
+
+.settings-label {
+  display: block;
+  font-size: 14px;
+  color: #ccc;
+  margin-bottom: 6px;
+}
+
+.settings-select {
+  width: 100%;
+  padding: 8px 12px;
+  background: #222;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.settings-radio-group {
+  display: flex;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.settings-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #ccc;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.settings-back-btn {
+  margin-top: 24px;
+  padding: 8px 20px;
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.settings-back-btn:hover {
   background: #444;
 }

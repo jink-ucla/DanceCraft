@@ -11,6 +11,7 @@ export interface DanceInfo {
 interface HomeScreenProps {
   dances: DanceInfo[]
   onSelectDance: (dance: DanceInfo) => void
+  onSettings?: () => void
 }
 
 function getPersonalBest(danceId: string): number | null {
@@ -18,7 +19,7 @@ function getPersonalBest(danceId: string): number | null {
   return stored ? JSON.parse(stored) : null
 }
 
-export function HomeScreen({ dances, onSelectDance }: HomeScreenProps) {
+export function HomeScreen({ dances, onSelectDance, onSettings }: HomeScreenProps) {
   const [bests, setBests] = useState<Record<string, number | null>>({})
 
   useEffect(() => {
@@ -34,6 +35,11 @@ export function HomeScreen({ dances, onSelectDance }: HomeScreenProps) {
       <header className="home-header">
         <h1>Groovy</h1>
         <p className="home-subtitle">Dance along to any video with real-time pose feedback</p>
+        {onSettings && (
+          <button className="home-settings-btn" onClick={onSettings}>
+            Settings
+          </button>
+        )}
       </header>
 
       <div className="dance-cards">

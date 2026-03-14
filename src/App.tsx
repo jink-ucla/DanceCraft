@@ -3,6 +3,7 @@ import { HomeScreen } from './components/HomeScreen'
 import type { DanceInfo } from './components/HomeScreen'
 import { DanceMode } from './components/DanceMode'
 import { ResultsScreen } from './components/ResultsScreen'
+import { Settings } from './components/Settings'
 import { computePostDanceScore } from './scoring/dtw'
 import type { DTWResult, TimestampedPose } from './scoring/dtw'
 import type { Pose } from './scoring/types'
@@ -21,6 +22,7 @@ type View =
   | { screen: 'home' }
   | { screen: 'dance'; dance: DanceInfo }
   | { screen: 'results'; dance: DanceInfo; result: DTWResult }
+  | { screen: 'settings' }
 
 function App() {
   const [view, setView] = useState<View>({ screen: 'home' })
@@ -30,13 +32,11 @@ function App() {
   const handleDanceFinish = useCallback((_score: number, _hits: number, _total: number) => {
     if (view.screen !== 'dance') return
 
-    // Compute DTW-based post-dance score
     const result = computePostDanceScore(
       referencePosesRef.current,
       userPosesRef.current,
     )
 
-    // Save personal best
     const key = `groovy_best_${view.dance.id}`
     const prev = localStorage.getItem(key)
     const prevScore = prev ? JSON.parse(prev) : 0
@@ -51,6 +51,14 @@ function App() {
   const handleRecordPose = useCallback((pose: Pose, time: number) => {
     userPosesRef.current.push({ time, pose })
   }, [])
+
+  if (view.screen === 'settings') {
+    return (
+      <div className="app">
+        <Settings onBack={() => setView({ screen: 'home' })} />
+      </div>
+    )
+  }
 
   if (view.screen === 'results') {
     return (
@@ -97,6 +105,7 @@ function App() {
           userPosesRef.current = []
           setView({ screen: 'dance', dance })
         }}
+        onSettings={() => setView({ screen: 'settings' })}
       />
     </div>
   )
