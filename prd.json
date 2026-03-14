@@ -1,0 +1,210 @@
+{
+  "project": "Groovy",
+  "branchName": "main",
+  "description": "Open-source, web-based dance game. Dance along to any video, get real-time key-pose feedback during the dance, and full scoring with playback review after. Game mode with generous, encouraging scoring. Runs entirely in the browser on a MacBook Pro.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Project scaffold with testing infrastructure",
+      "description": "Set up a Vite + React + TypeScript project with Vitest for unit tests and Playwright for e2e tests. Include a basic dev server, build script, and CI-ready test commands.",
+      "acceptanceCriteria": [
+        "Running `npm install && npm run dev` starts a dev server on localhost",
+        "Running `npm run test` executes Vitest and passes with at least one placeholder test",
+        "Running `npm run test:e2e` executes Playwright and passes with at least one placeholder test",
+        "TypeScript strict mode is enabled",
+        "Project builds without errors via `npm run build`"
+      ],
+      "storyPoints": 2,
+      "priority": "critical",
+      "dependencies": []
+    },
+    {
+      "id": "US-002",
+      "title": "Webcam feed with real-time pose estimation",
+      "description": "Display a webcam feed in the browser using WebRTC getUserMedia. Run MoveNet Lightning via TensorFlow.js on the webcam frames and overlay detected keypoints on a canvas. Show FPS counter to confirm performance.",
+      "acceptanceCriteria": [
+        "Webcam feed displays in the browser after user grants permission",
+        "MoveNet Lightning loads and runs pose estimation on each frame",
+        "Detected keypoints (17 points) are drawn as colored dots on a canvas overlay",
+        "Skeleton lines connect the keypoints (shoulders-elbows-wrists, hips-knees-ankles, etc.)",
+        "FPS counter shows 30+ FPS on a MacBook Pro",
+        "Unit test: pose data normalization functions are tested with fixture data",
+        "Graceful error handling if webcam is denied or unavailable"
+      ],
+      "storyPoints": 5,
+      "priority": "critical",
+      "dependencies": ["US-001"]
+    },
+    {
+      "id": "US-003",
+      "title": "Offline pose extraction pipeline",
+      "description": "Python script that downloads a video via yt-dlp, extracts frames, runs MoveNet pose estimation on each frame, and outputs a JSON file with timestamped pose data (joint coordinates and confidence scores).",
+      "acceptanceCriteria": [
+        "Script accepts a YouTube URL as input",
+        "Downloads video using yt-dlp to a local directory",
+        "Extracts pose data for each frame with timestamps",
+        "Outputs a JSON file with format: { fps, duration, keyframes: [{ time, keypoints: [{x, y, score, name}] }] }",
+        "Handles videos up to 5 minutes long",
+        "Unit test: JSON output schema is validated",
+        "Script includes a requirements.txt with all Python dependencies",
+        "README documents how to run the pipeline"
+      ],
+      "storyPoints": 5,
+      "priority": "critical",
+      "dependencies": []
+    },
+    {
+      "id": "US-004",
+      "title": "Joint angle extraction and pose comparison",
+      "description": "Core scoring library that converts raw keypoint coordinates into joint angles and compares two poses using cosine similarity. Position-invariant and scale-invariant.",
+      "acceptanceCriteria": [
+        "Extracts angles for major joints: elbows, shoulders, hips, knees (at minimum 8 angles)",
+        "Comparison is position-invariant (doesn't matter where user stands)",
+        "Comparison is scale-invariant (doesn't matter how far from camera)",
+        "Returns a similarity score between 0 and 1 for each joint",
+        "Returns an overall weighted similarity score",
+        "Configurable joint weights (arms weighted higher than feet for dance)",
+        "Unit tests with fixture pose data covering: identical poses (score ~1.0), completely different poses (score ~0), partially matching poses (score in between)",
+        "Unit tests for edge cases: missing keypoints, low confidence scores"
+      ],
+      "storyPoints": 5,
+      "priority": "critical",
+      "dependencies": ["US-001"]
+    },
+    {
+      "id": "US-005",
+      "title": "Key pose detection from reference video",
+      "description": "Algorithm that analyzes a reference pose timeline (JSON) and identifies key/dramatic poses — moments where the dancer holds a position, makes a sharp transition, or strikes a distinctive pose. These become the real-time scoring checkpoints during gameplay.",
+      "acceptanceCriteria": [
+        "Analyzes pose timeline JSON and outputs a list of key pose timestamps",
+        "Detects held positions (low velocity for N frames)",
+        "Detects sharp transitions (high velocity followed by sudden stop)",
+        "Detects distinctive poses (high angle deviation from neutral standing)",
+        "Each key pose includes: timestamp, expected pose data, tolerance threshold",
+        "Configurable sensitivity (more or fewer key poses)",
+        "Unit tests with synthetic pose timeline data",
+        "At least 5-15 key poses detected per minute of dance for good gameplay feel"
+      ],
+      "storyPoints": 5,
+      "priority": "high",
+      "dependencies": ["US-003", "US-004"]
+    },
+    {
+      "id": "US-006",
+      "title": "Dance mode UI — play video and dance along",
+      "description": "Main gameplay screen. Plays the reference dance video with a webcam preview in the corner. During the dance, real-time key-pose detection flashes feedback (Perfect/Good/Miss) when the user hits or misses a key pose checkpoint.",
+      "acceptanceCriteria": [
+        "Reference video plays full-screen or near full-screen",
+        "Webcam preview shows in a corner (picture-in-picture style)",
+        "Countdown (3-2-1) before the dance starts",
+        "Key pose checkpoints flash on screen as they approach",
+        "When user hits a key pose: show 'Perfect' or 'Good' with satisfying visual feedback",
+        "When user misses: show 'Miss' briefly, non-judgmental",
+        "Running score/combo counter visible during dance",
+        "Dance ends when video finishes",
+        "E2e test: page loads, shows video player and webcam preview (mocked webcam)",
+        "Smooth, game-like feel — no jank or lag"
+      ],
+      "storyPoints": 8,
+      "priority": "high",
+      "dependencies": ["US-002", "US-005"]
+    },
+    {
+      "id": "US-007",
+      "title": "Post-dance scoring with DTW alignment",
+      "description": "After the dance finishes, compare the user's full pose recording against the reference using Dynamic Time Warping for temporal alignment, then compute a detailed per-section and overall score.",
+      "acceptanceCriteria": [
+        "User's pose data is recorded during the entire dance session",
+        "DTW aligns user poses to reference poses (handles slight timing differences)",
+        "Overall score computed as percentage (0-100%)",
+        "Per-section scores if sections are defined (or per 10-second chunks by default)",
+        "Score breakdown by body part (arms, legs, torso)",
+        "Generous game-mode thresholds: 80%+ = S rank, 60-79% = A, 40-59% = B, <40% = C",
+        "Unit tests for DTW alignment with synthetic data",
+        "Unit tests for score computation with known inputs"
+      ],
+      "storyPoints": 5,
+      "priority": "high",
+      "dependencies": ["US-004", "US-006"]
+    },
+    {
+      "id": "US-008",
+      "title": "Post-dance results and playback review",
+      "description": "Results screen after the dance showing the score, rank, and a playback review where the user can watch their recorded dance alongside the reference with color-coded feedback highlighting which sections were good/bad.",
+      "acceptanceCriteria": [
+        "Results screen shows: overall score, rank (S/A/B/C), per-section breakdown",
+        "Playback mode: shows reference video and user's recorded webcam side by side",
+        "Color-coded timeline bar showing green (good), yellow (okay), red (poor) sections",
+        "User can click on timeline to jump to specific sections",
+        "Encouraging messages regardless of score (game mode)",
+        "Option to retry the same dance",
+        "E2e test: results screen renders with mock score data"
+      ],
+      "storyPoints": 5,
+      "priority": "high",
+      "dependencies": ["US-007"]
+    },
+    {
+      "id": "US-009",
+      "title": "Dance selection and home screen",
+      "description": "Home screen where users can see available dances (pre-processed videos), select one, and start dancing. Clean, inviting UI that sets the fun game tone.",
+      "acceptanceCriteria": [
+        "Home screen displays available dances as cards with thumbnail and title",
+        "Clicking a dance card navigates to the dance mode",
+        "Shows personal best score for each dance if available",
+        "At least the reference dance video is available as a pre-loaded option",
+        "Clean, modern UI — not developer-looking",
+        "E2e test: home screen loads, shows dance cards, navigation works"
+      ],
+      "storyPoints": 3,
+      "priority": "high",
+      "dependencies": ["US-001"]
+    },
+    {
+      "id": "US-010",
+      "title": "Settings and device configuration",
+      "description": "Settings page where users can select their webcam (if multiple), adjust scoring sensitivity, and configure display preferences.",
+      "acceptanceCriteria": [
+        "Lists available webcams and allows selection",
+        "Selected webcam persists across sessions (localStorage)",
+        "Scoring sensitivity slider (easy/normal/hard)",
+        "Mirror mode toggle (flip webcam feed horizontally)",
+        "Settings accessible from home screen",
+        "E2e test: settings page loads, webcam dropdown populates"
+      ],
+      "storyPoints": 3,
+      "priority": "medium",
+      "dependencies": ["US-009"]
+    },
+    {
+      "id": "US-011",
+      "title": "Score history and personal bests",
+      "description": "Track scores across sessions. Show personal best for each dance and a history of recent attempts.",
+      "acceptanceCriteria": [
+        "Scores saved to localStorage after each dance",
+        "Personal best displayed on dance selection card",
+        "History page showing recent attempts with date, score, and rank",
+        "Can view score history for each individual dance",
+        "Unit test: score storage and retrieval functions"
+      ],
+      "storyPoints": 3,
+      "priority": "medium",
+      "dependencies": ["US-008"]
+    },
+    {
+      "id": "US-012",
+      "title": "Easy setup and documentation",
+      "description": "Ensure the project is easy to set up for non-programmers. Clear README with step-by-step instructions, minimal dependencies, and ideally a single launcher command.",
+      "acceptanceCriteria": [
+        "README includes: what the project is, screenshot/gif, prerequisites, setup steps",
+        "Setup requires no more than: clone, install Node.js, npm install, npm run dev",
+        "Python pipeline has its own clear setup section with requirements.txt",
+        "Pre-processed reference dance JSON is included in the repo so users can play immediately",
+        "npm run dev starts everything needed"
+      ],
+      "storyPoints": 2,
+      "priority": "medium",
+      "dependencies": ["US-006"]
+    }
+  ]
+}

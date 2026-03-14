@@ -1,0 +1,11 @@
+{
+  "allowedCommands": [
+    "npm install",
+    "npm run dev",
+    "npm run build",
+    "npm run test",
+    "npm run test:e2e",
+    "npx vitest",
+    "npx playwright test"
+  ]
+}
