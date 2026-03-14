@@ -4,6 +4,7 @@ import {
   SKELETON_CONNECTIONS,
   KEYPOINT_RADIUS,
 } from '../pose/skeleton'
+import { detectKeyPoses } from '../scoring/keyPoseDetection'
 import type { PoseTimeline } from '../scoring/keyPoseDetection'
 import type { Pose, Keypoint } from '../scoring/types'
 
@@ -30,6 +31,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
 
   // Reference pose data for ghost overlay
   const referencePosesRef = useRef<{ time: number; keypoints: Keypoint[] }[]>([])
+  const [keyPoseTimestamps, setKeyPoseTimestamps] = useState<number[]>([])
 
   // Draw pose overlay on webcam canvas
   const drawPose = useCallback(
@@ -111,6 +113,14 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
           time: kf.time,
           keypoints: kf.keypoints as Keypoint[],
         }))
+
+        // Detect key poses for timeline markers
+        const keyPoses = detectKeyPoses(timeline, {
+          minGapSeconds: 2.0,
+          heldFrameCount: 8,
+          distinctiveThreshold: 0.5,
+        })
+        setKeyPoseTimestamps(keyPoses.map((kp) => kp.timestamp))
 
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error('Webcam not available')
@@ -204,6 +214,25 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     return () => clearTimeout(timer)
   }, [phase, resumeCountdown, practiceLoop])
 
+  // Seek to specific time
+  const seekTo = useCallback((time: number) => {
+    const refVideo = refVideoRef.current
+    if (!refVideo) return
+    const clamped = Math.max(0, Math.min(time, refVideo.duration || 0))
+    refVideo.currentTime = clamped
+    setCurrentTime(clamped)
+  }, [])
+
+  // Handle timeline click to seek
+  const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const ratio = (e.clientX - rect.left) / rect.width
+    const refVideo = refVideoRef.current
+    if (refVideo && refVideo.duration) {
+      seekTo(ratio * refVideo.duration)
+    }
+  }, [seekTo])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -214,12 +243,20 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
         } else if (phase === 'paused') {
           startResume()
         }
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault()
+        const step = e.shiftKey ? 1 : 5
+        seekTo(currentTime + step)
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault()
+        const step = e.shiftKey ? 1 : 5
+        seekTo(currentTime - step)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [phase, pause, startResume])
+  }, [phase, pause, startResume, currentTime, seekTo])
 
   // Keep detection loop running during pause (webcam stays active)
   useEffect(() => {
@@ -299,11 +336,32 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
         />
       </div>
 
-      {/* Progress bar */}
+      {/* Timeline scrubber */}
       {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
-        <div className="dance-progress-bar">
-          <div className="dance-progress-fill" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }} />
-          <div className="dance-progress-time">
+        <div className="practice-scrubber-container">
+          <div className="practice-scrubber" onClick={handleTimelineClick}>
+            <div className="practice-scrubber-track">
+              <div
+                className="practice-scrubber-fill"
+                style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+              />
+              {/* Key pose markers */}
+              {duration > 0 && keyPoseTimestamps.map((t, i) => (
+                <div
+                  key={i}
+                  className="practice-scrubber-marker"
+                  style={{ left: `${(t / duration) * 100}%` }}
+                  title={`Key pose at ${formatTime(t)}`}
+                />
+              ))}
+              {/* Scrubber handle */}
+              <div
+                className="practice-scrubber-handle"
+                style={{ left: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+          <div className="practice-scrubber-time">
             {duration > 0 ? `${formatTime(currentTime)} / ${formatTime(duration)}` : ''}
           </div>
         </div>

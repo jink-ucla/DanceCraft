@@ -1569,6 +1569,77 @@
   border-color: rgba(0, 136, 255, 0.5);
 }
 
+/* Practice scrubber / timeline */
+.practice-scrubber-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 15;
+  padding: 8px 16px 12px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+}
+
+.practice-scrubber {
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.practice-scrubber-track {
+  position: relative;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  overflow: visible;
+}
+
+.practice-scrubber-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: #00aaff;
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+
+.practice-scrubber-handle {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  transition: left 0.1s linear;
+  z-index: 3;
+}
+
+.practice-scrubber:hover .practice-scrubber-handle {
+  width: 16px;
+  height: 16px;
+}
+
+.practice-scrubber-marker {
+  position: absolute;
+  top: -3px;
+  width: 4px;
+  height: 12px;
+  background: rgba(255, 170, 0, 0.7);
+  border-radius: 2px;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.practice-scrubber-time {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ========== REPLAY MODE ========== */
 
 .replay-mode {

@@ -35,7 +35,7 @@
 ## Phase 4: Practice Mode (IN PROGRESS)
 
 - US-400: Practice mode - pause and resume — **COMPLETE**
-- US-401: Practice mode - video scrubbing — TODO
+- US-401: Practice mode - video scrubbing — **COMPLETE**
 - US-402: Practice mode - section looping — TODO
 - US-403: Practice mode - target pose overlay — TODO
 
@@ -60,4 +60,4 @@ None currently tracked.
 
 ## What's Next
 
-US-401: Practice mode - video scrubbing (Phase 4)
+US-402: Practice mode - section looping (Phase 4)
