@@ -236,3 +236,108 @@
   color: #ff6b6b;
   font-size: 18px;
 }
+
+.back-button {
+  margin-top: 16px;
+  padding: 8px 20px;
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.back-button:hover {
+  background: #444;
+}
+
+/* Home Screen */
+.home-screen {
+  width: 100%;
+  max-width: 800px;
+}
+
+.home-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.home-header h1 {
+  font-size: 3rem;
+  background: linear-gradient(135deg, #00ff88, #00ccff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+}
+
+.home-subtitle {
+  color: #888;
+  font-size: 16px;
+}
+
+.dance-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.dance-card {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s;
+  text-align: left;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.dance-card:hover {
+  border-color: #00ff88;
+  transform: translateY(-2px);
+}
+
+.dance-card-thumbnail {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #222;
+  overflow: hidden;
+}
+
+.dance-card-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dance-card-placeholder-thumb {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1a2a1a, #1a1a2a);
+}
+
+.dance-card-info {
+  padding: 12px 16px;
+}
+
+.dance-card-info h3 {
+  font-size: 16px;
+  margin: 0 0 4px;
+  color: #fff;
+}
+
+.dance-card-duration {
+  font-size: 13px;
+  color: #888;
+}
+
+.dance-card-best {
+  display: block;
+  font-size: 13px;
+  color: #00ff88;
+  margin-top: 4px;
+}

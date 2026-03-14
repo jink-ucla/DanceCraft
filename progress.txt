@@ -104,3 +104,15 @@
   - Rank thresholds are generous (game mode): S ≥ 80%, A ≥ 60%, B ≥ 40%, C < 40%
   - Body part grouping: Arms = elbows + shoulders, Legs = hips + knees
 ---
+
+## 2026-03-14 - US-009
+- Created HomeScreen component with dance cards showing available dances
+- Updated App.tsx with proper view routing (home ↔ dance with dance data)
+- Personal best scores saved to/loaded from localStorage
+- Updated e2e tests for new home screen and navigation flow
+- Files changed: src/components/HomeScreen.tsx, src/App.tsx, src/App.css, tests/e2e/placeholder.spec.ts, tests/e2e/dance-mode.spec.ts
+- **Learnings for future iterations:**
+  - Available dances defined as AVAILABLE_DANCES constant in App.tsx — add new dances there
+  - Personal best scores stored as `groovy_best_{danceId}` in localStorage
+  - View routing uses discriminated union type `{ screen: 'home' } | { screen: 'dance'; dance: DanceInfo }` for type safety
+---
