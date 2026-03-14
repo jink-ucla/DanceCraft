@@ -91,3 +91,16 @@
   - Scoring: Perfect (≥0.85) = 100 pts + combo bonus, Good (≥0.65) = 50 pts + combo, Miss = 0 + combo reset
   - Webcam PIP at 320x240 for performance — full resolution not needed when reference video is primary
 ---
+
+## 2026-03-14 - US-007
+- Implemented DTW alignment algorithm for post-dance scoring
+- Added full scoring pipeline: DTW alignment, per-section scores (10s chunks), per-body-part scores, rank computation
+- Subsampling to 300 frames max for performance
+- Files changed: src/scoring/dtw.ts, src/scoring/index.ts, tests/unit/scoring/dtw.test.ts
+- 21 new unit tests (5 DTW, 3 alignment score, 3 section scores, 3 body part scores, 4 rank, 3 post-dance score)
+- **Learnings for future iterations:**
+  - DTW O(n*m) cost matrix — must subsample long sequences (300 frame cap)
+  - DTW uses 1 - comparePoses() as distance metric — keeps everything in same angle-comparison space
+  - Rank thresholds are generous (game mode): S ≥ 80%, A ≥ 60%, B ≥ 40%, C < 40%
+  - Body part grouping: Arms = elbows + shoulders, Legs = hips + knees
+---
