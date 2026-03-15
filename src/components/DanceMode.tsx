@@ -9,6 +9,7 @@ import {
 import { comparePoses } from '../scoring/comparison'
 import { detectKeyPoses } from '../scoring/keyPoseDetection'
 import type { KeyPose, PoseTimeline } from '../scoring/keyPoseDetection'
+import { TargetPoseFigure } from './TargetPoseFigure'
 import type { Pose, Keypoint } from '../scoring/types'
 import type { TimestampedPose } from '../scoring/dtw'
 
@@ -18,10 +19,13 @@ type FeedbackType = 'perfect' | 'good' | 'miss' | null
 interface DanceModeProps {
   referencePoseUrl: string
   referenceVideoUrl?: string
+  mirrorVideo?: boolean
+  customKeyPoses?: KeyPose[] | null
   onFinish?: (score: number, totalHits: number, totalPoses: number) => void
   onRecordPose?: (pose: Pose, time: number) => void
   onReferencePosesLoaded?: (poses: TimestampedPose[]) => void
   onRecordingComplete?: (blob: Blob) => void
+  onBack?: () => void
 }
 
 interface FeedbackDisplay {
@@ -29,7 +33,7 @@ interface FeedbackDisplay {
   timestamp: number
 }
 
-export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRecordPose, onReferencePosesLoaded, onRecordingComplete }: DanceModeProps) {
+export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, customKeyPoses, onFinish, onRecordPose, onReferencePosesLoaded, onRecordingComplete, onBack }: DanceModeProps) {
   const webcamRef = useRef<HTMLVideoElement>(null)
   const refVideoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -53,6 +57,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
   const [isMuted, setIsMuted] = useState(false)
   const [progress, setProgress] = useState(0)
   const [videoDuration, setVideoDuration] = useState(0)
+  const [targetPose, setTargetPose] = useState<{ pose: Pose; progress: number } | null>(null)
 
   const keyPosesRef = useRef<KeyPose[]>([])
   const nextKeyPoseIdxRef = useRef(0)
@@ -152,13 +157,30 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
         }
       }
 
-      // Record pose for post-dance scoring
-      const elapsed = (Date.now() - danceStartTimeRef.current) / 1000
+      // Use video currentTime for elapsed — stays in sync with music
+      const refVideo = refVideoRef.current
+      const elapsed = refVideo ? refVideo.currentTime : (Date.now() - danceStartTimeRef.current) / 1000
       onRecordPose?.(userPose, elapsed)
 
       // Check key pose matches
       const keyPoses = keyPosesRef.current
       const nextIdx = nextKeyPoseIdxRef.current
+
+      // Show upcoming target pose with timing (appears 2.5s before, hits at 0)
+      const LEAD_TIME = 2.5
+      if (nextIdx < keyPoses.length) {
+        const nextKP = keyPoses[nextIdx]
+        const timeUntil = nextKP.timestamp - elapsed
+        if (timeUntil <= LEAD_TIME && timeUntil > -0.5) {
+          // progress: 0 = just appeared, 1 = hit time
+          const progress = Math.min(1, 1 - timeUntil / LEAD_TIME)
+          setTargetPose({ pose: nextKP.pose, progress })
+        } else if (timeUntil > LEAD_TIME) {
+          setTargetPose(null)
+        }
+      } else {
+        setTargetPose(null)
+      }
 
       if (nextIdx < keyPoses.length) {
         const nextKP = keyPoses[nextIdx]
@@ -174,6 +196,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
             setCombo((c) => c + 1)
             setComboKey((k) => k + 1)
             setTotalHits((h) => h + 1)
+            setTargetPose(null)
             nextKeyPoseIdxRef.current++
           } else if (result.overallScore >= 0.65) {
             showFeedback('good')
@@ -181,6 +204,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
             setCombo((c) => c + 1)
             setComboKey((k) => k + 1)
             setTotalHits((h) => h + 1)
+            setTargetPose(null)
             nextKeyPoseIdxRef.current++
           } else if (elapsed > nextKP.timestamp + 0.5) {
             // Missed — past the window
@@ -189,6 +213,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
               if (c > 1) setComboBroke(true)
               return 0
             })
+            setTargetPose(null)
             nextKeyPoseIdxRef.current++
           }
         } else if (elapsed > nextKP.timestamp + 0.5) {
@@ -198,12 +223,12 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
             if (c > 1) setComboBroke(true)
             return 0
           })
+          setTargetPose(null)
           nextKeyPoseIdxRef.current++
         }
       }
 
       // Check if dance is over
-      const refVideo = refVideoRef.current
       const videoEnded = refVideo && refVideo.ended
       const pastLastPose = nextIdx >= keyPoses.length &&
         elapsed > keyPoses[keyPoses.length - 1]?.timestamp + 2
@@ -227,11 +252,11 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
         if (!response.ok) throw new Error('Failed to load reference poses')
         const timeline: PoseTimeline = await response.json()
 
-        // Detect key poses
-        const keyPoses = detectKeyPoses(timeline, {
-          minGapSeconds: 2.0,
+        // Use custom key poses if provided, otherwise auto-detect
+        const keyPoses = customKeyPoses ?? detectKeyPoses(timeline, {
+          minGapSeconds: 3.0,
           heldFrameCount: 8,
-          distinctiveThreshold: 0.5,
+          distinctiveThreshold: 1.0,
         })
         keyPosesRef.current = keyPoses
         totalKeyPosesRef.current = keyPoses.length
@@ -421,6 +446,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
             playsInline
             muted
             preload="auto"
+            style={mirrorVideo ? { transform: 'scaleX(-1)' } : undefined}
           />
         ) : (
           <div className="dance-reference-placeholder">
@@ -472,6 +498,21 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
         )}
         {comboBroke && (
           <div className="dance-combo-break">Combo Break!</div>
+        )}
+        {/* Target pose figure with border countdown */}
+        {targetPose && phase === 'dancing' && (
+          <div
+            className={`dance-target-pose ${targetPose.progress >= 0.85 ? 'dance-target-pose-hit' : ''}`}
+            key={`pose-${nextKeyPoseIdxRef.current}`}
+            style={{
+              '--countdown-progress': `${targetPose.progress * 100}%`,
+            } as React.CSSProperties}
+          >
+            <TargetPoseFigure pose={targetPose.pose} size={90} />
+            {targetPose.progress >= 0.85 && (
+              <div className="dance-target-now">NOW</div>
+            )}
+          </div>
         )}
       </div>
 
@@ -545,6 +586,13 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, onFinish, onRec
         <div className="dance-loading-overlay">
           <div>Loading dance...</div>
         </div>
+      )}
+
+      {/* Back button */}
+      {onBack && (
+        <button className="dance-back-btn" onClick={onBack}>
+          Back
+        </button>
       )}
 
       {/* Feedback flash */}

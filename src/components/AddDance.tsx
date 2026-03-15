@@ -11,10 +11,11 @@ const YOUTUBE_URL_REGEX = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.b
 interface AddDanceProps {
   onClose: () => void
   onDanceAdded: () => void
+  onJobStarted?: (jobId: string, youtubeUrl: string) => void
   apiBase?: string
 }
 
-export function AddDance({ onClose, onDanceAdded, apiBase = 'http://localhost:3001' }: AddDanceProps) {
+export function AddDance({ onClose, onDanceAdded, onJobStarted, apiBase = 'http://localhost:3001' }: AddDanceProps) {
   const [url, setUrl] = useState('')
   const [state, setState] = useState<ModalState>({ step: 'input' })
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -63,6 +64,7 @@ export function AddDance({ onClose, onDanceAdded, apiBase = 'http://localhost:30
       const data = await res.json()
       const jobId = data.jobId as string
       setState({ step: 'processing', jobId, status: data.status, progress: 'Starting...' })
+      onJobStarted?.(jobId, url.trim())
 
       // Poll for job status
       pollRef.current = setInterval(async () => {

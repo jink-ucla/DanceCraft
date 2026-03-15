@@ -6,6 +6,7 @@ import type { Job } from './jobs.ts'
 import { createDance, updateDance } from './db.ts'
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data', 'dances')
+const PYTHON = process.env.PYTHON_PATH || path.join(process.cwd(), '.venv', 'bin', 'python3')
 
 function ensureDataDir(): void {
   fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -125,16 +126,42 @@ async function generateThumbnail(videoPath: string, outputDir: string): Promise<
   return thumbnailPath
 }
 
-async function extractPoses(videoPath: string, outputDir: string): Promise<string> {
+async function extractPoses(videoPath: string, outputDir: string, onProgress?: (pct: number) => void): Promise<string> {
   const posesPath = path.join(outputDir, 'poses.json')
   const scriptPath = path.join(process.cwd(), 'scripts', 'extract_poses.py')
 
-  await runCommand('python', [
-    scriptPath,
-    videoPath,
-    '--output', posesPath,
-    '--max-duration', '600',
-  ])
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(PYTHON, [
+      scriptPath,
+      videoPath,
+      '--output', posesPath,
+      '--max-duration', '600',
+    ])
+
+    let stderr = ''
+
+    proc.stdout.on('data', (data: Buffer) => {
+      const lines = data.toString().split('\n')
+      for (const line of lines) {
+        // Parse "PROGRESS:frame/total:pct"
+        const match = line.match(/^PROGRESS:\d+\/\d+:(\d+)/)
+        if (match && onProgress) {
+          onProgress(parseInt(match[1], 10))
+        }
+      }
+    })
+
+    proc.stderr.on('data', (data: Buffer) => { stderr += data.toString() })
+
+    proc.on('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`extract_poses exited with code ${code}: ${stderr}`))
+    })
+
+    proc.on('error', (err) => {
+      reject(new Error(`Failed to spawn extract_poses: ${err.message}`))
+    })
+  })
 
   return posesPath
 }
@@ -173,9 +200,11 @@ export async function processJob(job: Job): Promise<void> {
     const thumbnailPath = await generateThumbnail(videoPath, dir)
     updateJob(job.id, { outputPaths: { ...job.outputPaths, video: videoPath, audio: audioPath, thumbnail: thumbnailPath } })
 
-    // Step 5: Extract poses
-    updateJob(job.id, { status: 'extracting_poses', progress: 'Extracting poses (this may take a while)...' })
-    const posesPath = await extractPoses(videoPath, dir)
+    // Step 5: Extract poses (with real-time progress)
+    updateJob(job.id, { status: 'extracting_poses', progress: 'Extracting poses 0%' })
+    const posesPath = await extractPoses(videoPath, dir, (pct) => {
+      updateJob(job.id, { progress: `Extracting poses ${pct}%` })
+    })
 
     // Save to database
     const dance = createDance({

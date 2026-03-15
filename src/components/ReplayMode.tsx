@@ -5,9 +5,15 @@ import {
 } from '../pose/skeleton'
 import type { Keypoint } from '../scoring/types'
 import type { TimestampedPose, SectionScore } from '../scoring/dtw'
+import { TargetPoseFigure } from './TargetPoseFigure'
+import { loadDanceSettings } from '../storage/danceSettings'
+import { detectKeyPoses } from '../scoring/keyPoseDetection'
+import type { KeyPose, PoseTimeline } from '../scoring/keyPoseDetection'
 
 interface ReplayModeProps {
   referenceVideoUrl?: string
+  referencePoseUrl?: string
+  danceId?: string
   userVideoUrl: string
   userPoses: TimestampedPose[]
   sectionScores: SectionScore[]
@@ -33,6 +39,7 @@ function scoreToColor(score: number): string {
 }
 
 function formatTime(seconds: number): string {
+  if (!isFinite(seconds) || isNaN(seconds)) return '0:00'
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
@@ -42,6 +49,8 @@ const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2]
 
 export function ReplayMode({
   referenceVideoUrl,
+  referencePoseUrl,
+  danceId,
   userVideoUrl,
   userPoses,
   sectionScores,
@@ -57,6 +66,27 @@ export function ReplayMode({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
+  const [keyPoses, setKeyPoses] = useState<KeyPose[]>([])
+  const [nearestKeyPose, setNearestKeyPose] = useState<KeyPose | null>(null)
+
+  // Load key poses
+  useEffect(() => {
+    if (!referencePoseUrl) return
+    (async () => {
+      try {
+        const res = await fetch(referencePoseUrl)
+        if (!res.ok) return
+        const timeline: PoseTimeline = await res.json()
+        const settings = danceId ? loadDanceSettings(danceId) : null
+        const kps = settings?.customKeyPoses ?? detectKeyPoses(timeline, {
+          minGapSeconds: 2.0,
+          heldFrameCount: 8,
+          distinctiveThreshold: 0.5,
+        })
+        setKeyPoses(kps)
+      } catch { /* ignore */ }
+    })()
+  }, [referencePoseUrl, danceId])
 
   // Draw skeleton overlay on user video canvas
   const drawPoseAtTime = useCallback((time: number) => {
@@ -69,7 +99,6 @@ export function ReplayMode({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Find the closest pose to the current time
     let closestPose: TimestampedPose | null = null
     let closestDiff = Infinity
     for (const pose of userPoses) {
@@ -84,19 +113,16 @@ export function ReplayMode({
 
     const keypoints = closestPose.pose.keypoints as Keypoint[]
 
-    // Find matching section score for per-joint coloring
     const section = sectionScores.find(
       (s) => time >= s.startTime && time < s.endTime
     )
     const sectionScore = section?.score ?? 0.5
 
-    // Draw skeleton connections
     ctx.lineWidth = 2
     for (const [i, j] of SKELETON_CONNECTIONS) {
       const kpA = keypoints[i]
       const kpB = keypoints[j]
       if (kpA && kpB && kpA.score > 0.3 && kpB.score > 0.3) {
-        // Color based on section score
         ctx.strokeStyle = scoreToColor(sectionScore)
         ctx.beginPath()
         ctx.moveTo(kpA.x, kpA.y)
@@ -105,7 +131,6 @@ export function ReplayMode({
       }
     }
 
-    // Draw keypoints
     for (const kp of keypoints) {
       if (kp.score > 0.3) {
         ctx.fillStyle = scoreToColor(sectionScore)
@@ -116,7 +141,22 @@ export function ReplayMode({
     }
   }, [userPoses, sectionScores])
 
-  // Render loop for skeleton overlay
+  // Update nearest key pose
+  useEffect(() => {
+    if (keyPoses.length === 0) { setNearestKeyPose(null); return }
+    let nearest: KeyPose | null = null
+    let nearestDist = Infinity
+    for (const kp of keyPoses) {
+      const dist = Math.abs(kp.timestamp - currentTime)
+      if (dist < nearestDist) {
+        nearest = kp
+        nearestDist = dist
+      }
+    }
+    setNearestKeyPose(nearestDist < 3 ? nearest : null)
+  }, [currentTime, keyPoses])
+
+  // Render loop
   useEffect(() => {
     if (!isPlaying) return
 
@@ -133,16 +173,25 @@ export function ReplayMode({
     return () => cancelAnimationFrame(animFrameRef.current)
   }, [isPlaying, drawPoseAtTime])
 
-  // Initialize canvas dimensions when user video loads
   const handleUserVideoLoaded = useCallback(() => {
     const userVideo = userVideoRef.current
     const canvas = canvasRef.current
     if (userVideo && canvas) {
       canvas.width = userVideo.videoWidth
       canvas.height = userVideo.videoHeight
-      setDuration(userVideo.duration)
+      if (isFinite(userVideo.duration) && userVideo.duration > 0) {
+        setDuration(userVideo.duration)
+      }
     }
   }, [])
+
+  // Also try to get duration from reference video
+  const handleRefVideoLoaded = useCallback(() => {
+    const refVideo = refVideoRef.current
+    if (refVideo && isFinite(refVideo.duration) && refVideo.duration > 0 && duration === 0) {
+      setDuration(refVideo.duration)
+    }
+  }, [duration])
 
   const togglePlay = useCallback(() => {
     const userVideo = userVideoRef.current
@@ -154,6 +203,11 @@ export function ReplayMode({
       refVideo?.pause()
       setIsPlaying(false)
     } else {
+      // Unmute reference video for audio
+      if (refVideo) {
+        refVideo.muted = false
+        refVideo.volume = 0.7
+      }
       userVideo.play().catch(() => {})
       refVideo?.play().catch(() => {})
       setIsPlaying(true)
@@ -161,23 +215,25 @@ export function ReplayMode({
   }, [isPlaying])
 
   const handleSeek = useCallback((time: number) => {
+    const clamped = Math.max(0, Math.min(time, duration || Infinity))
     const userVideo = userVideoRef.current
     const refVideo = refVideoRef.current
     if (userVideo) {
-      userVideo.currentTime = time
-      setCurrentTime(time)
-      drawPoseAtTime(time)
+      userVideo.currentTime = clamped
+      setCurrentTime(clamped)
+      drawPoseAtTime(clamped)
     }
     if (refVideo) {
-      refVideo.currentTime = time
+      refVideo.currentTime = clamped
     }
-  }, [drawPoseAtTime])
+  }, [drawPoseAtTime, duration])
 
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const ratio = (e.clientX - rect.left) / rect.width
-    handleSeek(ratio * duration)
-  }, [duration, handleSeek])
+    const totalDur = duration || (sectionScores.length > 0 ? sectionScores[sectionScores.length - 1].endTime : 0)
+    if (totalDur > 0) handleSeek(ratio * totalDur)
+  }, [duration, handleSeek, sectionScores])
 
   const handleSpeedChange = useCallback((speed: number) => {
     setPlaybackSpeed(speed)
@@ -191,19 +247,23 @@ export function ReplayMode({
   useEffect(() => {
     const userVideo = userVideoRef.current
     if (!userVideo) return
-
     const handleEnded = () => {
       setIsPlaying(false)
       cancelAnimationFrame(animFrameRef.current)
     }
-
     userVideo.addEventListener('ended', handleEnded)
     return () => userVideo.removeEventListener('ended', handleEnded)
   }, [])
 
-  const totalDuration = duration || (sectionScores.length > 0
-    ? sectionScores[sectionScores.length - 1].endTime
-    : 0)
+  // Compute best duration from multiple sources
+  const totalDuration = duration > 0 && isFinite(duration)
+    ? duration
+    : (sectionScores.length > 0 ? sectionScores[sectionScores.length - 1].endTime : 0)
+
+  // Click video to toggle play
+  const handleVideoClick = useCallback(() => {
+    togglePlay()
+  }, [togglePlay])
 
   return (
     <div className="replay-mode">
@@ -222,52 +282,56 @@ export function ReplayMode({
         </div>
       </div>
 
-      {/* Side-by-side videos */}
-      <div className="replay-videos">
-        <div className="replay-video-panel">
-          <div className="replay-video-label">REFERENCE</div>
-          {referenceVideoUrl ? (
-            <video
-              ref={refVideoRef}
-              src={referenceVideoUrl}
-              className="replay-video"
-              playsInline
-              muted
-              preload="auto"
-              onLoadedMetadata={() => {
-                if (refVideoRef.current) {
-                  refVideoRef.current.playbackRate = playbackSpeed
-                }
-              }}
-            />
-          ) : (
-            <div className="replay-video-placeholder">No reference video</div>
-          )}
-        </div>
+      {/* Videos — reference is main, user is PIP */}
+      <div className="replay-main-video" onClick={handleVideoClick}>
+        {referenceVideoUrl ? (
+          <video
+            ref={refVideoRef}
+            src={referenceVideoUrl}
+            className="replay-video-full"
+            playsInline
+            muted
+            preload="auto"
+            onLoadedMetadata={() => {
+              handleRefVideoLoaded()
+              if (refVideoRef.current) refVideoRef.current.playbackRate = playbackSpeed
+            }}
+          />
+        ) : (
+          <div className="replay-video-placeholder">No reference video</div>
+        )}
 
-        <div className="replay-video-panel">
-          <div className="replay-video-label">YOUR PERFORMANCE</div>
-          <div className="replay-user-container">
-            <video
-              ref={userVideoRef}
-              src={userVideoUrl}
-              className="replay-video"
-              playsInline
-              muted
-              preload="auto"
-              onLoadedMetadata={handleUserVideoLoaded}
-              style={{ transform: 'scaleX(-1)' }}
-            />
-            <canvas
-              ref={canvasRef}
-              className="replay-pose-overlay"
-              style={{ transform: 'scaleX(-1)' }}
-            />
+        {/* Key pose indicator */}
+        {nearestKeyPose && (
+          <div className="replay-keypose-indicator">
+            <TargetPoseFigure pose={nearestKeyPose.pose} size={60} />
           </div>
+        )}
+      </div>
+
+      {/* User video PIP */}
+      <div className="replay-user-pip">
+        <div className="replay-pip-label">YOU</div>
+        <div className="replay-user-container">
+          <video
+            ref={userVideoRef}
+            src={userVideoUrl}
+            className="replay-video-pip"
+            playsInline
+            muted
+            preload="auto"
+            onLoadedMetadata={handleUserVideoLoaded}
+            style={{ transform: 'scaleX(-1)' }}
+          />
+          <canvas
+            ref={canvasRef}
+            className="replay-pose-overlay"
+            style={{ transform: 'scaleX(-1)' }}
+          />
         </div>
       </div>
 
-      {/* Color-coded timeline */}
+      {/* Color-coded timeline with scrubber */}
       <div className="replay-timeline-container">
         <div className="replay-timeline" onClick={handleTimelineClick}>
           {sectionScores.map((section, i) => (
@@ -279,6 +343,15 @@ export function ReplayMode({
                 backgroundColor: scoreToColor(section.score),
               }}
               title={`${formatTime(section.startTime)} - ${formatTime(section.endTime)}: ${Math.round(section.score * 100)}%`}
+            />
+          ))}
+          {/* Key pose markers */}
+          {totalDuration > 0 && keyPoses.map((kp, i) => (
+            <div
+              key={`kp-${i}`}
+              className="replay-keypose-marker"
+              style={{ left: `${(kp.timestamp / totalDuration) * 100}%` }}
+              title={`Key pose at ${formatTime(kp.timestamp)}`}
             />
           ))}
           {/* Playhead */}

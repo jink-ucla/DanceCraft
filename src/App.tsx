@@ -8,32 +8,18 @@ import { History } from './components/History'
 import { AddDance } from './components/AddDance'
 import { ReplayMode } from './components/ReplayMode'
 import { PracticeMode } from './components/PracticeMode'
+import { DebugMode } from './components/DebugMode'
 import { computePostDanceScore } from './scoring/dtw'
 import { computeRank } from './scoring/dtw'
 import { saveScore } from './storage/scores'
+import { loadDanceSettings } from './storage/danceSettings'
 import type { DTWResult, TimestampedPose } from './scoring/dtw'
 import type { Pose } from './scoring/types'
 import './App.css'
 
 const API_BASE = 'http://localhost:3001'
 
-const BUNDLED_DANCES: DanceInfo[] = [
-  {
-    id: 'ive-cover',
-    title: 'IVE Dance Cover',
-    poseDataUrl: '/dances/ive-cover.json',
-    videoUrl: '/dances/ive-cover.mp4',
-    duration: '3:09',
-    source: 'bundled',
-  },
-  {
-    id: 'sample-dance',
-    title: 'Sample Dance',
-    poseDataUrl: '/dances/sample-dance.json',
-    duration: '0:30',
-    source: 'bundled',
-  },
-]
+const BUNDLED_DANCES: DanceInfo[] = []
 
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60)
@@ -85,13 +71,28 @@ type View =
   | { screen: 'history' }
   | { screen: 'replay'; dance: DanceInfo; result: DTWResult }
   | { screen: 'practice'; dance: DanceInfo }
+  | { screen: 'debug'; dance: DanceInfo }
+
+interface ProcessingJob {
+  jobId: string
+  youtubeUrl?: string
+  status: string
+  progress?: string
+  title?: string
+  error?: string
+}
 
 function App() {
   const [view, setView] = useState<View>({ screen: 'home' })
   const [showAddDance, setShowAddDance] = useState(false)
   const [apiDances, setApiDances] = useState<DanceInfo[]>([])
+  const [hiddenBundled, setHiddenBundled] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('groovy_hidden_bundled') || '[]') } catch { return [] }
+  })
   const [dancesLoading, setDancesLoading] = useState(true)
   const [dancesError, setDancesError] = useState<string | null>(null)
+  const [processingJobs, setProcessingJobs] = useState<ProcessingJob[]>([])
+  const pollIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map())
   const userPosesRef = useRef<TimestampedPose[]>([])
   const referencePosesRef = useRef<TimestampedPose[]>([])
   const recordingBlobRef = useRef<Blob | null>(null)
@@ -117,12 +118,115 @@ function App() {
     fetchDances()
   }, [fetchDances])
 
-  // Merge API dances (newest first) with bundled dances as fallback
+  const trackJob = useCallback((jobId: string, title?: string, youtubeUrl?: string) => {
+    setProcessingJobs((prev) => {
+      if (prev.some((j) => j.jobId === jobId)) return prev
+      return [...prev, { jobId, status: 'queued', title, youtubeUrl }]
+    })
+
+    if (pollIntervalsRef.current.has(jobId)) return
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/dances/jobs/${jobId}`)
+        if (!res.ok) return
+        const job = await res.json()
+
+        if (job.status === 'complete') {
+          clearInterval(pollIntervalsRef.current.get(jobId)!)
+          pollIntervalsRef.current.delete(jobId)
+          setProcessingJobs((prev) => prev.filter((j) => j.jobId !== jobId))
+          fetchDances()
+        } else if (job.status === 'error') {
+          clearInterval(pollIntervalsRef.current.get(jobId)!)
+          pollIntervalsRef.current.delete(jobId)
+          setProcessingJobs((prev) =>
+            prev.map((j) => j.jobId === jobId ? { ...j, status: 'error', error: job.error || 'Processing failed' } : j)
+          )
+          // Auto-dismiss error after 8 seconds
+          setTimeout(() => {
+            setProcessingJobs((prev) => prev.filter((j) => j.jobId !== jobId))
+          }, 8000)
+        } else {
+          setProcessingJobs((prev) =>
+            prev.map((j) => j.jobId === jobId ? { ...j, status: job.status, progress: job.progress, title: job.metadata?.title || j.title, youtubeUrl: job.youtubeUrl || j.youtubeUrl } : j)
+          )
+        }
+      } catch {
+        // Network error — keep trying
+      }
+    }, 2000)
+
+    pollIntervalsRef.current.set(jobId, interval)
+  }, [fetchDances])
+
+  // On mount, check for any already-processing dances
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/dances`)
+        if (!res.ok) return
+        const data: ApiDance[] = await res.json()
+        const processing = data.filter((d) => d.status !== 'complete' && d.status !== 'error')
+        for (const d of processing) {
+          trackJob(String(d.id), d.title, d.youtubeUrl)
+        }
+      } catch { /* ignore */ }
+    })()
+  }, [trackJob])
+
+  useEffect(() => {
+    return () => {
+      pollIntervalsRef.current.forEach((interval) => clearInterval(interval))
+    }
+  }, [])
+
+  const statusLabel = (status: string): string => {
+    switch (status) {
+      case 'queued': return 'Starting...'
+      case 'downloading': return 'Downloading...'
+      case 'extracting_audio': return 'Extracting audio...'
+      case 'extracting_poses': return 'Extracting poses...'
+      case 'generating_thumbnail': return 'Almost done...'
+      default: return 'Processing...'
+    }
+  }
+
+  // Convert processing jobs to DanceInfo cards
+  const processingDances: DanceInfo[] = processingJobs.map((job) => {
+    const videoId = job.youtubeUrl ? extractYoutubeVideoId(job.youtubeUrl) : null
+    const thumbnail = videoId
+      ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+      : undefined
+    return {
+      id: `processing-${job.jobId}`,
+      title: job.title || 'New Dance',
+      thumbnail,
+      poseDataUrl: '',
+      duration: '',
+      source: 'api',
+      processing: true,
+      processingStatus: job.error
+        ? `Error: ${job.error}`
+        : job.progress || statusLabel(job.status),
+    }
+  })
+
+  // Merge: processing first, then completed API dances, then bundled
+  const visibleBundled = BUNDLED_DANCES.filter((d) => !hiddenBundled.includes(d.id))
   const allDances = dancesError
-    ? BUNDLED_DANCES
-    : [...apiDances, ...BUNDLED_DANCES]
+    ? visibleBundled
+    : [...processingDances, ...apiDances, ...visibleBundled]
 
   const handleDeleteDance = useCallback(async (dance: DanceInfo) => {
+    if (dance.source === 'bundled') {
+      setHiddenBundled((prev) => {
+        const next = [...prev, dance.id]
+        localStorage.setItem('groovy_hidden_bundled', JSON.stringify(next))
+        return next
+      })
+      return
+    }
     const apiId = dance.id.replace('api-', '')
     try {
       const res = await fetch(`${API_BASE}/api/dances/${apiId}`, { method: 'DELETE' })
@@ -207,6 +311,21 @@ function App() {
         <PracticeMode
           referencePoseUrl={view.dance.poseDataUrl}
           referenceVideoUrl={view.dance.videoUrl}
+          danceId={view.dance.id}
+          onBack={() => setView({ screen: 'home' })}
+        />
+      </div>
+    )
+  }
+
+  if (view.screen === 'debug') {
+    return (
+      <div className="app">
+        <DebugMode
+          referencePoseUrl={view.dance.poseDataUrl}
+          referenceVideoUrl={view.dance.videoUrl}
+          danceName={view.dance.title}
+          danceId={view.dance.id}
           onBack={() => setView({ screen: 'home' })}
         />
       </div>
@@ -222,6 +341,8 @@ function App() {
       <div className="app">
         <ReplayMode
           referenceVideoUrl={view.dance.videoUrl}
+          referencePoseUrl={view.dance.poseDataUrl}
+          danceId={view.dance.id}
           userVideoUrl={userVideoUrl}
           userPoses={userPosesRef.current}
           sectionScores={view.result.sectionScores}
@@ -260,24 +381,22 @@ function App() {
   }
 
   if (view.screen === 'dance') {
+    const danceSettings = loadDanceSettings(view.dance.id)
     return (
       <div className="app">
         <DanceMode
           referencePoseUrl={view.dance.poseDataUrl}
           referenceVideoUrl={view.dance.videoUrl}
+          mirrorVideo={danceSettings.mirror}
+          customKeyPoses={danceSettings.customKeyPoses}
           onFinish={handleDanceFinish}
           onRecordPose={handleRecordPose}
           onRecordingComplete={handleRecordingComplete}
           onReferencePosesLoaded={(poses) => {
             referencePosesRef.current = poses
           }}
+          onBack={() => setView({ screen: 'home' })}
         />
-        <button
-          className="back-button"
-          onClick={() => setView({ screen: 'home' })}
-        >
-          Back
-        </button>
       </div>
     )
   }
@@ -295,6 +414,7 @@ function App() {
         }}
         onPracticeDance={(dance) => setView({ screen: 'practice', dance })}
         onDeleteDance={handleDeleteDance}
+        onDebugDance={(dance) => setView({ screen: 'debug', dance })}
         onSettings={() => setView({ screen: 'settings' })}
         onHistory={() => setView({ screen: 'history' })}
         onAddDance={() => setShowAddDance(true)}
@@ -305,6 +425,7 @@ function App() {
           onDanceAdded={() => {
             fetchDances()
           }}
+          onJobStarted={(jobId, youtubeUrl) => trackJob(jobId, undefined, youtubeUrl)}
         />
       )}
     </div>

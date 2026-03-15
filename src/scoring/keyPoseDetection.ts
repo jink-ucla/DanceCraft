@@ -47,10 +47,14 @@ const NEUTRAL_ANGLES: Record<string, number> = {
   right_elbow: Math.PI,
   left_shoulder: Math.PI * 0.1, // arms at sides
   right_shoulder: Math.PI * 0.1,
+  left_wrist: Math.PI,      // straight wrist
+  right_wrist: Math.PI,
   left_hip: Math.PI,        // straight leg
   right_hip: Math.PI,
   left_knee: Math.PI,
   right_knee: Math.PI,
+  left_ankle: Math.PI * 0.5, // foot at ~90 degrees
+  right_ankle: Math.PI * 0.5,
 }
 
 /**
@@ -180,18 +184,45 @@ export function detectKeyPoses(
     }
   }
 
-  // Step 3: Sort by timestamp and deduplicate (enforce minimum gap)
-  candidates.sort((a, b) => a.timestamp - b.timestamp)
+  // Step 3: Prioritize held/transition poses, then fill gaps with distinctive
+  const typePriority: Record<string, number> = { held: 0, transition: 1, distinctive: 2 }
+  candidates.sort((a, b) => {
+    // Primary: priority (held first, then transition, then distinctive)
+    const pa = typePriority[a.type] ?? 2
+    const pb = typePriority[b.type] ?? 2
+    if (pa !== pb) return pa - pb
+    // Secondary: timestamp
+    return a.timestamp - b.timestamp
+  })
 
+  // First pass: place held and transition poses
   const result: KeyPose[] = []
-  let lastTimestamp = -Infinity
+  const usedTimestamps: number[] = []
 
   for (const candidate of candidates) {
-    if (candidate.timestamp - lastTimestamp >= config.minGapSeconds) {
+    if (candidate.type === 'distinctive') continue
+    const tooClose = usedTimestamps.some(
+      (t) => Math.abs(candidate.timestamp - t) < config.minGapSeconds
+    )
+    if (!tooClose) {
       result.push(candidate)
-      lastTimestamp = candidate.timestamp
+      usedTimestamps.push(candidate.timestamp)
     }
   }
 
+  // Second pass: fill gaps with distinctive poses
+  for (const candidate of candidates) {
+    if (candidate.type !== 'distinctive') continue
+    const tooClose = usedTimestamps.some(
+      (t) => Math.abs(candidate.timestamp - t) < config.minGapSeconds
+    )
+    if (!tooClose) {
+      result.push(candidate)
+      usedTimestamps.push(candidate.timestamp)
+    }
+  }
+
+  // Sort final result by timestamp
+  result.sort((a, b) => a.timestamp - b.timestamp)
   return result
 }

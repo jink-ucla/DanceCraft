@@ -1,52 +1,71 @@
-import * as poseDetection from '@tensorflow-models/pose-detection'
-import * as tf from '@tensorflow/tfjs-core'
-import '@tensorflow/tfjs-converter'
-import '@tensorflow/tfjs-backend-webgl'
+import { PoseLandmarker, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision'
 import type { Keypoint, Pose } from '../scoring/types'
+import { KEYPOINT_NAMES } from '../scoring/types'
 
-let detector: poseDetection.PoseDetector | null = null
+let landmarker: PoseLandmarker | null = null
+let lastTimestamp = -1
 
-export async function initDetector(): Promise<poseDetection.PoseDetector> {
-  if (detector) return detector
+export async function initDetector(): Promise<PoseLandmarker> {
+  if (landmarker) return landmarker
 
-  await tf.setBackend('webgl')
-  await tf.ready()
-
-  detector = await poseDetection.createDetector(
-    poseDetection.SupportedModels.MoveNet,
-    {
-      modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-    }
+  const vision = await FilesetResolver.forVisionTasks(
+    // Use CDN for WASM files (avoids bundling large binaries)
+    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
   )
 
-  return detector
+  landmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      // Full model: great accuracy + fast on GPU (~8ms = 120+ FPS)
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task',
+      delegate: 'GPU',
+    },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+  })
+
+  lastTimestamp = -1
+  return landmarker
 }
 
 export async function estimatePose(
   video: HTMLVideoElement
 ): Promise<Pose | null> {
-  if (!detector) return null
+  if (!landmarker) return null
+  if (video.readyState < 2) return null
 
-  const poses = await detector.estimatePoses(video, {
-    flipHorizontal: false,
-  })
+  // MediaPipe requires strictly increasing timestamps
+  const timestamp = performance.now()
+  if (timestamp <= lastTimestamp) return null
+  lastTimestamp = timestamp
 
-  if (poses.length === 0) return null
+  const result = landmarker.detectForVideo(video, timestamp)
 
-  const pose = poses[0]
-  const keypoints: Keypoint[] = pose.keypoints.map((kp) => ({
-    x: kp.x,
-    y: kp.y,
-    score: kp.score ?? 0,
-    name: kp.name ?? '',
+  if (!result.landmarks || result.landmarks.length === 0) return null
+
+  const landmarks = result.landmarks[0]
+  const videoWidth = video.videoWidth || video.clientWidth
+  const videoHeight = video.videoHeight || video.clientHeight
+
+  // All 33 MediaPipe landmarks, mapped 1:1 to our keypoint format
+  const keypoints: Keypoint[] = landmarks.map((lm, i) => ({
+    x: lm.x * videoWidth,
+    y: lm.y * videoHeight,
+    score: lm.visibility ?? 0,
+    name: KEYPOINT_NAMES[i] ?? `landmark_${i}`,
   }))
 
   return { keypoints }
 }
 
 export function disposeDetector(): void {
-  if (detector) {
-    detector.dispose()
-    detector = null
+  if (landmarker) {
+    landmarker.close()
+    landmarker = null
+    lastTimestamp = -1
   }
 }
+
+// Re-export for potential direct MediaPipe drawing usage
+export { DrawingUtils }

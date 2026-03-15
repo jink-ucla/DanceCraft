@@ -5,18 +5,30 @@ import {
   KEYPOINT_RADIUS,
 } from '../pose/skeleton'
 import { detectKeyPoses } from '../scoring/keyPoseDetection'
-import type { PoseTimeline } from '../scoring/keyPoseDetection'
+import { comparePoses } from '../scoring/comparison'
+import type { KeyPose, PoseTimeline } from '../scoring/keyPoseDetection'
 import type { Pose, Keypoint } from '../scoring/types'
+import { TargetPoseFigure } from './TargetPoseFigure'
+import { loadDanceSettings, saveDanceSettings, extractYoutubeEmbedId } from '../storage/danceSettings'
 
 type PracticePhase = 'loading' | 'ready' | 'playing' | 'paused' | 'resuming'
+type PracticeTab = 'practice' | 'tutorial'
 
 interface PracticeModeProps {
   referencePoseUrl: string
   referenceVideoUrl?: string
+  danceId: string
   onBack: () => void
 }
 
-export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: PracticeModeProps) {
+function scoreToGrade(score: number): { label: string; color: string } {
+  if (score >= 0.85) return { label: 'Perfect', color: '#00ff88' }
+  if (score >= 0.70) return { label: 'Good', color: '#00ccff' }
+  if (score >= 0.55) return { label: 'OK', color: '#ffcc00' }
+  return { label: 'Miss', color: '#ff6666' }
+}
+
+export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onBack }: PracticeModeProps) {
   const webcamRef = useRef<HTMLVideoElement>(null)
   const refVideoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -24,6 +36,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
   const streamRef = useRef<MediaStream | null>(null)
 
   const [phase, setPhase] = useState<PracticePhase>('loading')
+  const [activeTab, setActiveTab] = useState<PracticeTab>('practice')
   const [resumeCountdown, setResumeCountdown] = useState(3)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -34,9 +47,24 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [showGhostOverlay, setShowGhostOverlay] = useState(true)
 
-  // Reference pose data for ghost overlay
+  // Pose scoring overlay (toggle on free practice)
+  const [showPoseScore, setShowPoseScore] = useState(false)
+  const showPoseScoreRef = useRef(false)
+  const [liveScore, setLiveScore] = useState<number | null>(null)
+  const [nearestKeyPose, setNearestKeyPose] = useState<KeyPose | null>(null)
+
+  // Keep ref in sync with state
+  useEffect(() => { showPoseScoreRef.current = showPoseScore }, [showPoseScore])
+
+  // Reference pose data
   const referencePosesRef = useRef<{ time: number; keypoints: Keypoint[] }[]>([])
   const [keyPoseTimestamps, setKeyPoseTimestamps] = useState<number[]>([])
+  const [keyPoses, setKeyPoses] = useState<KeyPose[]>([])
+
+  // Tutorial
+  const [settings, setSettings] = useState(() => loadDanceSettings(danceId))
+  const [tutorialInput, setTutorialInput] = useState(settings.tutorialUrl)
+  const tutorialEmbedId = extractYoutubeEmbedId(settings.tutorialUrl)
 
   // Draw pose overlay on webcam canvas
   const drawPose = useCallback(
@@ -75,7 +103,6 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     const refPoses = referencePosesRef.current
     if (refPoses.length === 0) return
 
-    // Find closest reference pose
     let closest = refPoses[0]
     let closestDiff = Math.abs(closest.time - time)
     for (const rp of refPoses) {
@@ -90,9 +117,6 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
 
     const alpha = isPaused ? 0.6 : 0.3
     const color = `rgba(0, 170, 255, ${alpha})`
-
-    // Scale reference keypoints to webcam canvas dimensions
-    // Reference poses are in original video space; scale to canvas
     const keypoints = closest.keypoints
 
     ctx.strokeStyle = color
@@ -118,7 +142,39 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     }
   }, [showGhostOverlay])
 
-  // Detection loop
+  // Get reference pose at a given time
+  const getRefPoseAtTime = useCallback((time: number): Pose | null => {
+    const refPoses = referencePosesRef.current
+    if (refPoses.length === 0) return null
+
+    let closest = refPoses[0]
+    let closestDiff = Math.abs(closest.time - time)
+    for (const rp of refPoses) {
+      const diff = Math.abs(rp.time - time)
+      if (diff < closestDiff) {
+        closestDiff = diff
+        closest = rp
+      }
+    }
+    if (closestDiff > 0.5) return null
+    return { keypoints: closest.keypoints }
+  }, [])
+
+  // Find nearest key pose to a given time
+  const findNearestKeyPose = useCallback((time: number): KeyPose | null => {
+    let nearest: KeyPose | null = null
+    let nearestDist = Infinity
+    for (const kp of keyPoses) {
+      const dist = Math.abs(kp.timestamp - time)
+      if (dist < nearestDist) {
+        nearest = kp
+        nearestDist = dist
+      }
+    }
+    return nearest
+  }, [keyPoses])
+
+  // Detection loop — handles both playing and scoring
   const practiceLoop = useCallback(async () => {
     const video = webcamRef.current
     const canvas = canvasRef.current
@@ -133,12 +189,32 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
     const userPose = await estimatePose(video)
+
+    // Get current video time for scoring
+    const refVideo = refVideoRef.current
+    const videoTime = refVideo?.currentTime ?? 0
+
     if (userPose) {
-      drawPose(ctx, userPose, canvas.width, canvas.height, '#00ff88')
+      // If pose scoring is on, color skeleton by score
+      if (showPoseScoreRef.current) {
+        const refPose = getRefPoseAtTime(videoTime)
+        if (refPose) {
+          const result = comparePoses(refPose, userPose)
+          const grade = scoreToGrade(result.overallScore)
+          drawPose(ctx, userPose, canvas.width, canvas.height, grade.color)
+          setLiveScore(result.overallScore)
+        } else {
+          drawPose(ctx, userPose, canvas.width, canvas.height, '#00ff88')
+          setLiveScore(null)
+        }
+        setNearestKeyPose(findNearestKeyPose(videoTime))
+      } else {
+        drawPose(ctx, userPose, canvas.width, canvas.height, '#00ff88')
+        setLiveScore(null)
+      }
     }
 
-    // Draw ghost reference pose overlay and update time tracking
-    const refVideo = refVideoRef.current
+    // Draw ghost reference pose
     if (refVideo) {
       drawGhostPose(ctx, refVideo.currentTime, canvas.width, canvas.height, false)
     }
@@ -163,7 +239,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     }
 
     animFrameRef.current = requestAnimationFrame(practiceLoop)
-  }, [drawPose, drawGhostPose, loopStart, loopEnd])
+  }, [drawPose, drawGhostPose, loopStart, loopEnd, getRefPoseAtTime, findNearestKeyPose])
 
   // Load reference poses and initialize
   useEffect(() => {
@@ -175,19 +251,19 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
         if (!response.ok) throw new Error('Failed to load reference poses')
         const timeline: PoseTimeline = await response.json()
 
-        // Store reference poses for potential ghost overlay
         referencePosesRef.current = timeline.keyframes.map((kf) => ({
           time: kf.time,
           keypoints: kf.keypoints as Keypoint[],
         }))
 
-        // Detect key poses for timeline markers
-        const keyPoses = detectKeyPoses(timeline, {
+        const danceSettings = loadDanceSettings(danceId)
+        const detected = danceSettings.customKeyPoses ?? detectKeyPoses(timeline, {
           minGapSeconds: 2.0,
           heldFrameCount: 8,
           distinctiveThreshold: 0.5,
         })
-        setKeyPoseTimestamps(keyPoses.map((kp) => kp.timestamp))
+        setKeyPoses(detected)
+        setKeyPoseTimestamps(detected.map((kp) => kp.timestamp))
 
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error('Webcam not available')
@@ -236,7 +312,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
         streamRef.current.getTracks().forEach((t) => t.stop())
       }
     }
-  }, [referencePoseUrl])
+  }, [referencePoseUrl, danceId])
 
   // Start practice
   const startPractice = useCallback(() => {
@@ -258,6 +334,14 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     if (refVideo) refVideo.pause()
     setPhase('paused')
   }, [])
+
+  // Resume instantly (no countdown)
+  const resumeInstant = useCallback(() => {
+    const refVideo = refVideoRef.current
+    if (refVideo) refVideo.play().catch(() => {})
+    setPhase('playing')
+    animFrameRef.current = requestAnimationFrame(practiceLoop)
+  }, [practiceLoop])
 
   // Resume with countdown
   const startResume = useCallback(() => {
@@ -281,7 +365,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     return () => clearTimeout(timer)
   }, [phase, resumeCountdown, practiceLoop])
 
-  // Seek to specific time
+  // Seek
   const seekTo = useCallback((time: number) => {
     const refVideo = refVideoRef.current
     if (!refVideo) return
@@ -290,7 +374,6 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     setCurrentTime(clamped)
   }, [])
 
-  // Handle timeline click to seek
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const ratio = (e.clientX - rect.left) / rect.width
@@ -300,30 +383,38 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     }
   }, [seekTo])
 
+  // Click video to pause/play
+  const handleVideoClick = useCallback(() => {
+    if (phase === 'playing') {
+      pause()
+    } else if (phase === 'paused') {
+      resumeInstant()
+    }
+  }, [phase, pause, resumeInstant])
+
   // Keyboard shortcuts
   useEffect(() => {
+    if (activeTab === 'tutorial') return
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         e.preventDefault()
         if (phase === 'playing') {
           pause()
         } else if (phase === 'paused') {
-          startResume()
+          if (e.shiftKey) startResume()
+          else resumeInstant()
         }
       } else if (e.code === 'ArrowRight') {
         e.preventDefault()
-        const step = e.shiftKey ? 1 : 5
-        seekTo(currentTime + step)
+        seekTo(currentTime + (e.shiftKey ? 1 : 5))
       } else if (e.code === 'ArrowLeft') {
         e.preventDefault()
-        const step = e.shiftKey ? 1 : 5
-        seekTo(currentTime - step)
+        seekTo(currentTime - (e.shiftKey ? 1 : 5))
       } else if (e.code === 'KeyA') {
-        // Set loop start point
         setLoopStart(currentTime)
         setLoopCount(0)
       } else if (e.code === 'KeyB') {
-        // Set loop end point (minimum 3 seconds from start)
         if (loopStart !== null && currentTime - loopStart >= 3) {
           setLoopEnd(currentTime)
           setLoopCount(0)
@@ -333,11 +424,12 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [phase, pause, startResume, currentTime, seekTo, loopStart])
+  }, [phase, pause, startResume, resumeInstant, currentTime, seekTo, loopStart, activeTab])
 
-  // Keep detection loop running during pause (webcam stays active)
+  // Keep detection loop running during pause (for live scoring)
   useEffect(() => {
     if (phase !== 'paused' && phase !== 'resuming') return
+    if (activeTab !== 'practice') return
 
     let running = true
     const loop = async () => {
@@ -353,12 +445,28 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
 
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       const userPose = await estimatePose(video)
+
+      const refVideo = refVideoRef.current
+      const videoTime = refVideo?.currentTime ?? 0
+
       if (userPose) {
-        drawPose(ctx, userPose, canvas.width, canvas.height, '#00ff88')
+        if (showPoseScoreRef.current) {
+          const refPose = getRefPoseAtTime(videoTime)
+          if (refPose) {
+            const result = comparePoses(refPose, userPose)
+            const grade = scoreToGrade(result.overallScore)
+            drawPose(ctx, userPose, canvas.width, canvas.height, grade.color)
+            setLiveScore(result.overallScore)
+          } else {
+            drawPose(ctx, userPose, canvas.width, canvas.height, '#00ff88')
+            setLiveScore(null)
+          }
+          setNearestKeyPose(findNearestKeyPose(videoTime))
+        } else {
+          drawPose(ctx, userPose, canvas.width, canvas.height, '#00ff88')
+        }
       }
 
-      // Draw ghost pose (higher opacity when paused)
-      const refVideo = refVideoRef.current
       if (refVideo) {
         drawGhostPose(ctx, refVideo.currentTime, canvas.width, canvas.height, true)
       }
@@ -368,7 +476,21 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
 
     requestAnimationFrame(loop)
     return () => { running = false }
-  }, [phase, drawPose, drawGhostPose])
+  }, [phase, drawPose, drawGhostPose, activeTab, getRefPoseAtTime, findNearestKeyPose])
+
+  // Save tutorial URL
+  const saveTutorialUrl = useCallback(() => {
+    const newSettings = { ...settings, tutorialUrl: tutorialInput }
+    saveDanceSettings(danceId, newSettings)
+    setSettings(newSettings)
+  }, [danceId, settings, tutorialInput])
+
+  const clearTutorialUrl = useCallback(() => {
+    const newSettings = { ...settings, tutorialUrl: '' }
+    saveDanceSettings(danceId, newSettings)
+    setSettings(newSettings)
+    setTutorialInput('')
+  }, [danceId, settings])
 
   if (error) {
     return <div className="dance-error">{error}</div>
@@ -380,197 +502,296 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, onBack }: Pr
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
+  const grade = liveScore !== null ? scoreToGrade(liveScore) : null
+
   return (
     <div className="practice-mode">
-      {/* Practice mode badge */}
-      <div className="practice-badge">PRACTICE MODE</div>
-
-      {/* Reference video area */}
-      <div className="dance-reference">
-        {referenceVideoUrl ? (
-          <video
-            ref={refVideoRef}
-            src={referenceVideoUrl}
-            className="dance-reference-video"
-            playsInline
-            muted
-            preload="auto"
-          />
-        ) : (
-          <div className="dance-reference-placeholder">
-            Reference Dance
-          </div>
-        )}
+      {/* Tab bar */}
+      <div className="practice-tabs">
+        <button
+          className={`practice-tab ${activeTab === 'practice' ? 'active' : ''}`}
+          onClick={() => setActiveTab('practice')}
+        >
+          Practice
+        </button>
+        <button
+          className={`practice-tab ${activeTab === 'tutorial' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tutorial')}
+        >
+          Tutorial
+        </button>
       </div>
 
-      {/* Webcam PIP */}
-      <div className="dance-webcam-pip">
-        <div className="dance-pip-label">YOU</div>
-        <video
-          ref={webcamRef}
-          playsInline
-          muted
-          style={{ transform: 'scaleX(-1)' }}
-        />
-        <canvas
-          ref={canvasRef}
-          className="pose-overlay"
-          style={{ transform: 'scaleX(-1)' }}
-        />
-      </div>
-
-      {/* Timeline scrubber */}
-      {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
-        <div className="practice-scrubber-container">
-          <div className="practice-scrubber" onClick={handleTimelineClick}>
-            <div className="practice-scrubber-track">
-              <div
-                className="practice-scrubber-fill"
-                style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
-              />
-              {/* Loop section highlight */}
-              {duration > 0 && loopStart !== null && loopEnd !== null && (
-                <div
-                  className="practice-scrubber-loop"
-                  style={{
-                    left: `${(loopStart / duration) * 100}%`,
-                    width: `${((loopEnd - loopStart) / duration) * 100}%`,
-                  }}
+      {/* ===== TUTORIAL TAB ===== */}
+      {activeTab === 'tutorial' && (
+        <div className="practice-tutorial">
+          {tutorialEmbedId ? (
+            <>
+              <div className="practice-tutorial-video">
+                <iframe
+                  src={`https://www.youtube.com/embed/${tutorialEmbedId}`}
+                  title="Dance tutorial"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
                 />
-              )}
-              {/* Key pose markers */}
-              {duration > 0 && keyPoseTimestamps.map((t, i) => (
-                <div
-                  key={i}
-                  className="practice-scrubber-marker"
-                  style={{ left: `${(t / duration) * 100}%` }}
-                  title={`Key pose at ${formatTime(t)}`}
+              </div>
+              <button className="practice-tutorial-swap" onClick={clearTutorialUrl}>
+                Change Video
+              </button>
+            </>
+          ) : (
+            <div className="practice-tutorial-empty">
+              <p className="practice-tutorial-prompt">Add a YouTube tutorial video</p>
+              <div className="practice-tutorial-input-row">
+                <input
+                  type="text"
+                  className="practice-tutorial-input"
+                  placeholder="https://youtube.com/watch?v=..."
+                  value={tutorialInput}
+                  onChange={(e) => setTutorialInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveTutorialUrl() }}
                 />
-              ))}
-              {/* Scrubber handle */}
-              <div
-                className="practice-scrubber-handle"
-                style={{ left: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
-              />
+                <button
+                  className="practice-tutorial-add-btn"
+                  onClick={saveTutorialUrl}
+                  disabled={!tutorialInput.trim()}
+                >
+                  Add
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="practice-scrubber-time">
-            {duration > 0 ? `${formatTime(currentTime)} / ${formatTime(duration)}` : ''}
-          </div>
+          )}
         </div>
       )}
 
-      {/* Loop & speed controls */}
-      {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
-        <div className="practice-loop-controls">
-          <button
-            className={`practice-loop-btn ${loopStart !== null ? 'active' : ''}`}
-            onClick={() => { setLoopStart(currentTime); setLoopCount(0) }}
-            title="Set loop start (A)"
-          >
-            A {loopStart !== null ? formatTime(loopStart) : ''}
-          </button>
-          <button
-            className={`practice-loop-btn ${loopEnd !== null ? 'active' : ''}`}
-            onClick={() => {
-              if (loopStart !== null && currentTime - loopStart >= 3) {
-                setLoopEnd(currentTime)
-                setLoopCount(0)
-              }
-            }}
-            disabled={loopStart === null}
-            title="Set loop end (B)"
-          >
-            B {loopEnd !== null ? formatTime(loopEnd) : ''}
-          </button>
-          {(loopStart !== null || loopEnd !== null) && (
-            <button
-              className="practice-loop-btn practice-loop-clear"
-              onClick={() => { setLoopStart(null); setLoopEnd(null); setLoopCount(0) }}
-              title="Clear loop"
-            >
-              Clear Loop
+      {/* ===== PRACTICE TAB ===== */}
+      {activeTab === 'practice' && (
+        <>
+          {/* Reference video area — click to pause */}
+          <div className="dance-reference" onClick={handleVideoClick} style={{ cursor: phase === 'playing' || phase === 'paused' ? 'pointer' : undefined }}>
+            {referenceVideoUrl ? (
+              <video
+                ref={refVideoRef}
+                src={referenceVideoUrl}
+                className="dance-reference-video"
+                playsInline
+                muted
+                preload="auto"
+              />
+            ) : (
+              <div className="dance-reference-placeholder">
+                Reference Dance
+              </div>
+            )}
+          </div>
+
+          {/* Webcam PIP */}
+          <div className="dance-webcam-pip">
+            <div className="dance-pip-label">YOU</div>
+            <video
+              ref={webcamRef}
+              playsInline
+              muted
+              style={{ transform: 'scaleX(-1)' }}
+            />
+            <canvas
+              ref={canvasRef}
+              className="pose-overlay"
+              style={{ transform: 'scaleX(-1)' }}
+            />
+          </div>
+
+          {/* Pose score overlay — shows when toggle is on */}
+          {showPoseScore && grade && (phase === 'playing' || phase === 'paused') && (
+            <div className="practice-score-overlay">
+              <div className="practice-score-grade" style={{ color: grade.color }}>
+                {grade.label}
+              </div>
+              <div className="practice-score-bar">
+                <div
+                  className="practice-score-bar-fill"
+                  style={{ width: `${(liveScore ?? 0) * 100}%`, background: grade.color }}
+                />
+              </div>
+              <div className="practice-score-pct" style={{ color: grade.color }}>
+                {Math.round((liveScore ?? 0) * 100)}%
+              </div>
+              {nearestKeyPose && Math.abs(nearestKeyPose.timestamp - currentTime) < 2 && (
+                <div className="practice-score-keypose">
+                  <TargetPoseFigure pose={nearestKeyPose.pose} size={50} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Timeline scrubber */}
+          {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
+            <div className="practice-scrubber-container">
+              <div className="practice-scrubber" onClick={handleTimelineClick}>
+                <div className="practice-scrubber-track">
+                  <div
+                    className="practice-scrubber-fill"
+                    style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                  />
+                  {duration > 0 && loopStart !== null && loopEnd !== null && (
+                    <div
+                      className="practice-scrubber-loop"
+                      style={{
+                        left: `${(loopStart / duration) * 100}%`,
+                        width: `${((loopEnd - loopStart) / duration) * 100}%`,
+                      }}
+                    />
+                  )}
+                  {duration > 0 && keyPoseTimestamps.map((t, i) => (
+                    <div
+                      key={i}
+                      className="practice-scrubber-marker"
+                      style={{ left: `${(t / duration) * 100}%` }}
+                      title={`Key pose at ${formatTime(t)}`}
+                    />
+                  ))}
+                  <div
+                    className="practice-scrubber-handle"
+                    style={{ left: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+              <div className="practice-scrubber-time">
+                {duration > 0 ? `${formatTime(currentTime)} / ${formatTime(duration)}` : ''}
+              </div>
+            </div>
+          )}
+
+          {/* Loop & speed controls */}
+          {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
+            <div className="practice-loop-controls">
+              <button
+                className={`practice-loop-btn ${loopStart !== null ? 'active' : ''}`}
+                onClick={() => { setLoopStart(currentTime); setLoopCount(0) }}
+                title="Set loop start (A)"
+              >
+                A {loopStart !== null ? formatTime(loopStart) : ''}
+              </button>
+              <button
+                className={`practice-loop-btn ${loopEnd !== null ? 'active' : ''}`}
+                onClick={() => {
+                  if (loopStart !== null && currentTime - loopStart >= 3) {
+                    setLoopEnd(currentTime)
+                    setLoopCount(0)
+                  }
+                }}
+                disabled={loopStart === null}
+                title="Set loop end (B)"
+              >
+                B {loopEnd !== null ? formatTime(loopEnd) : ''}
+              </button>
+              {(loopStart !== null || loopEnd !== null) && (
+                <button
+                  className="practice-loop-btn practice-loop-clear"
+                  onClick={() => { setLoopStart(null); setLoopEnd(null); setLoopCount(0) }}
+                  title="Clear loop"
+                >
+                  Clear Loop
+                </button>
+              )}
+              {loopStart !== null && loopEnd !== null && (
+                <span className="practice-loop-count">Loop #{loopCount + 1}</span>
+              )}
+              <div className="practice-speed-controls">
+                {[0.5, 0.75, 1].map((speed) => (
+                  <button
+                    key={speed}
+                    className={`practice-speed-btn ${playbackSpeed === speed ? 'active' : ''}`}
+                    onClick={() => {
+                      setPlaybackSpeed(speed)
+                      const refVideo = refVideoRef.current
+                      if (refVideo) refVideo.playbackRate = speed
+                    }}
+                  >
+                    {speed}x
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Toggle buttons row */}
+          {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
+            <div className="practice-toggles-row">
+              <button
+                className={`practice-toggle-btn ${showGhostOverlay ? 'active' : ''}`}
+                onClick={() => setShowGhostOverlay((v) => !v)}
+              >
+                Ghost {showGhostOverlay ? 'ON' : 'OFF'}
+              </button>
+              <button
+                className={`practice-toggle-btn ${showPoseScore ? 'active' : ''}`}
+                onClick={() => setShowPoseScore((v) => !v)}
+              >
+                Score {showPoseScore ? 'ON' : 'OFF'}
+              </button>
+            </div>
+          )}
+
+          {/* Ready overlay */}
+          {phase === 'ready' && (
+            <div className="dance-ready-overlay" onClick={startPractice}>
+              <div className="dance-ready-text">Tap to Start Practice</div>
+              <div className="dance-ready-hint">Click video or press Space to pause/resume</div>
+            </div>
+          )}
+
+          {/* Loading overlay */}
+          {phase === 'loading' && (
+            <div className="dance-loading-overlay">
+              <div>Loading practice session...</div>
+            </div>
+          )}
+
+          {/* Paused overlay */}
+          {phase === 'paused' && (
+            <div className="practice-paused-overlay">
+              <div className="practice-paused-text">PAUSED</div>
+              {showPoseScore && (
+                <div className="practice-paused-hint">Match the pose — your score updates live</div>
+              )}
+              {!showPoseScore && (
+                <div className="practice-paused-hint">Practice the current pose</div>
+              )}
+              <div className="practice-resume-buttons">
+                <button className="practice-resume-btn" onClick={resumeInstant}>
+                  Play
+                </button>
+                <button className="practice-resume-btn-secondary" onClick={startResume}>
+                  3-2-1 Go
+                </button>
+              </div>
+              <div className="practice-paused-shortcut">Space = play, Shift+Space = countdown</div>
+            </div>
+          )}
+
+          {/* Resume countdown */}
+          {phase === 'resuming' && (
+            <div className="dance-countdown-overlay">
+              <div className="dance-countdown-number" key={`cd-${resumeCountdown}`}>
+                {resumeCountdown > 0 ? resumeCountdown : 'GO!'}
+              </div>
+            </div>
+          )}
+
+          {/* Pause button */}
+          {phase === 'playing' && (
+            <button className="practice-pause-btn" onClick={pause}>
+              Pause
             </button>
           )}
-          {loopStart !== null && loopEnd !== null && (
-            <span className="practice-loop-count">Loop #{loopCount + 1}</span>
-          )}
-          <div className="practice-speed-controls">
-            {[0.5, 0.75, 1].map((speed) => (
-              <button
-                key={speed}
-                className={`practice-speed-btn ${playbackSpeed === speed ? 'active' : ''}`}
-                onClick={() => {
-                  setPlaybackSpeed(speed)
-                  const refVideo = refVideoRef.current
-                  if (refVideo) refVideo.playbackRate = speed
-                }}
-              >
-                {speed}x
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Ready overlay */}
-      {phase === 'ready' && (
-        <div className="dance-ready-overlay" onClick={startPractice}>
-          <div className="dance-ready-text">Tap to Start Practice</div>
-          <div className="dance-ready-hint">Press Space to pause/resume at any time</div>
-        </div>
-      )}
-
-      {/* Loading overlay */}
-      {phase === 'loading' && (
-        <div className="dance-loading-overlay">
-          <div>Loading practice session...</div>
-        </div>
-      )}
-
-      {/* Paused overlay */}
-      {phase === 'paused' && (
-        <div className="practice-paused-overlay">
-          <div className="practice-paused-text">PAUSED</div>
-          <div className="practice-paused-hint">Study the current pose</div>
-          <button className="practice-resume-btn" onClick={startResume}>
-            Resume
-          </button>
-          <div className="practice-paused-shortcut">or press Space</div>
-        </div>
-      )}
-
-      {/* Resume countdown */}
-      {phase === 'resuming' && (
-        <div className="dance-countdown-overlay">
-          <div className="dance-countdown-number" key={`cd-${resumeCountdown}`}>
-            {resumeCountdown > 0 ? resumeCountdown : 'GO!'}
-          </div>
-        </div>
+        </>
       )}
 
       {/* Back button */}
       <button className="practice-back-btn" onClick={onBack}>
         Back
       </button>
-
-      {/* Pause button (visible during playing) */}
-      {phase === 'playing' && (
-        <button className="practice-pause-btn" onClick={pause}>
-          Pause
-        </button>
-      )}
-
-      {/* Ghost overlay toggle */}
-      {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
-        <button
-          className={`practice-ghost-toggle ${showGhostOverlay ? 'active' : ''}`}
-          onClick={() => setShowGhostOverlay((v) => !v)}
-          title="Toggle reference pose overlay"
-        >
-          Ghost {showGhostOverlay ? 'ON' : 'OFF'}
-        </button>
-      )}
     </div>
   )
 }

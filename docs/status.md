@@ -1,54 +1,70 @@
 # Project Status
 
-**Last updated:** 2026-03-14
+**Last updated:** 2026-03-15
 
-**Current state:** Phase 1 - Core Polish & Bug Fixes
+**Current state:** Phase 7 - UX Polish & Practice Mode Redesign
 
-## Phase 0: Foundation (COMPLETE)
+## Phase 0-5: (COMPLETE)
 
-- US-001 through US-012: All delivered
-- 83 unit tests (Vitest), 4 e2e tests (Playwright), all passing
-- App is functional: pose tracking works, real-time detection works, scoring works, UI works
+All foundation, polish, library, recording/replay, practice mode, and testing phases complete.
 
-## Phase 1: Core Polish & Bug Fixes (IN PROGRESS)
+## Phase 6: Pose Detection Overhaul & UX (COMPLETE)
 
-- US-100: Fix music/audio not playing — **COMPLETE**
-- US-101: Move feedback to corner — **COMPLETE**
-- US-102: UI polish pass — **COMPLETE**
-- US-103: Dance mode UI polish — **COMPLETE**
+- MediaPipe BlazePose Heavy (offline) + Full (browser) — both outputting all 33 landmarks
+- Post-processing pipeline (outlier rejection, interpolation, temporal smoothing)
+- Full import pipeline with progress tracking
+- Debug/Edit mode with key pose editing
 
-## Phase 2: Dance Library & YouTube Integration (IN PROGRESS)
+## Phase 7: UX Polish & Practice Mode Redesign (COMPLETE - 2026-03-15)
 
-- US-200: Backend API server setup — **COMPLETE**
-- US-201: YouTube video download and processing API — **COMPLETE**
-- US-202: Dance library database and CRUD API — **COMPLETE**
-- US-203: Add Dance UI — **COMPLETE**
-- US-204: Dynamic dance library UI — **COMPLETE**
-- US-205: Serve processed video/audio from backend — **COMPLETE**
+### Pose Figure Upgrade
+- Replaced stick skeleton with **tapered capsule mannequin** figure — **COMPLETE**
+- Each body segment is a distinct shape (thigh, calf, upper arm, forearm) with dark outlines — **COMPLETE**
+- Square canvas adapts to both wide and tall poses — **COMPLETE**
+- Proportional sizing uses min(width, height) to prevent fat limbs — **COMPLETE**
 
-## Phase 3: Recording & Replay (IN PROGRESS)
+### Full 33-Landmark Pipeline
+- Upgraded from 17-keypoint MoveNet format to **full 33 MediaPipe BlazePose landmarks** — **COMPLETE**
+- Added hand landmarks (pinky, index, thumb) for wrist angle scoring — **COMPLETE**
+- Added foot landmarks (heel, foot_index) for ankle angle scoring — **COMPLETE**
+- Skeleton connections include hands and feet — **COMPLETE**
+- All existing dance data re-extracted with 33 landmarks — **COMPLETE**
+- Removed bundled sample dances (stale data) — **COMPLETE**
 
-- US-300: Record user webcam video during dance — **COMPLETE**
-- US-301: Save dance session data — **COMPLETE**
-- US-302: Replay mode — **COMPLETE**
+### Key Pose Editor (Edit Mode)
+- Renamed Debug → Edit in UI — **COMPLETE**
+- Add/remove/move key poses — **COMPLETE**
+- Per-video mirror toggle — **COMPLETE**
+- Tutorial video URL field — **COMPLETE**
+- Save/reset with localStorage persistence — **COMPLETE**
 
-## Phase 4: Practice Mode (IN PROGRESS)
+### Dance Mode Improvements
+- Cue timing synced to video.currentTime (was wall clock) — **COMPLETE**
+- Custom key poses from edit mode used during gameplay — **COMPLETE**
+- Mirror toggle applies to reference video — **COMPLETE**
 
-- US-400: Practice mode - pause and resume — **COMPLETE**
-- US-401: Practice mode - video scrubbing — **COMPLETE**
-- US-402: Practice mode - section looping — **COMPLETE**
-- US-403: Practice mode - target pose overlay — **COMPLETE**
+### Practice Mode Redesign
+- **Tutorial tab**: YouTube embed directly in practice mode, full-screen — **COMPLETE**
+- **Pose scoring overlay**: Toggle on free practice, real-time grade display — **COMPLETE**
+- Click video to pause/play — **COMPLETE**
+- Two resume options: instant Play or 3-2-1 countdown — **COMPLETE**
+- No blur on pause overlay — **COMPLETE**
+- Fixed scroll issue (position: fixed) — **COMPLETE**
 
-## Phase 5: Testing & Quality (IN PROGRESS)
+### Replay Mode Overhaul
+- Full-screen layout with reference video large, user PIP — **COMPLETE**
+- Audio plays from reference video — **COMPLETE**
+- Fixed Infinity:NaN time display — **COMPLETE**
+- Key pose indicators on video and timeline — **COMPLETE**
+- Click to pause/play — **COMPLETE**
 
-- US-500: Playwright e2e test infrastructure overhaul — **COMPLETE**
-- US-501: E2e tests - home screen and navigation — **COMPLETE**
-- US-502: E2e tests - dance mode lifecycle — **COMPLETE**
-- US-503: E2e tests - practice mode — **COMPLETE**
-- US-504: E2e tests - recording and replay — **COMPLETE**
-- US-505: Visual regression test baseline — **COMPLETE**
+### Import Pipeline
+- Real-time pose extraction progress (percentage) shown on cards — **COMPLETE**
+- Progress bar on processing dance cards — **COMPLETE**
 
-See `prd.json` for full story details and `docs/roadmap.md` for the phased plan.
+### UI Fixes
+- Three-dot menu icon centered — **COMPLETE**
+- Cleaned up stale data (9 orphan dance folders removed) — **COMPLETE**
 
 ## Known Bugs
 
@@ -57,12 +73,10 @@ None currently tracked.
 ## Test Summary
 
 - 181 unit tests (Vitest) — all passing
-- 65 e2e tests (Playwright) — all passing
-
-## Blockers
-
-- None
+- 65+ e2e tests (Playwright) — all passing
 
 ## What's Next
 
-ALL STORIES COMPLETE
+- Multi-person tracking (plan in docs/plans/multi-person-tracking.md)
+- History → replay (persist session data for later playback)
+- Score calibration with 33-landmark data

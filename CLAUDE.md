@@ -22,20 +22,28 @@ Open-source, web-based dance game where anyone can dance along to any video with
 ## Tech Stack
 
 - **Frontend**: React + TypeScript (Vite)
-- **Pose Estimation**: TensorFlow.js with MoveNet Lightning (50+ FPS in browser)
-- **Video Processing**: yt-dlp + ffmpeg + MoveNet (offline Python pipeline)
+- **Backend**: Node.js + Express + SQLite (Phase 2+)
+- **Pose Estimation (Browser)**: MediaPipe BlazePose Full via `@mediapipe/tasks-vision` PoseLandmarker (GPU delegate, 120+ FPS)
+- **Pose Estimation (Offline)**: MediaPipe BlazePose Heavy via Python `mediapipe` (highest accuracy, with post-processing)
+- **Video Processing**: yt-dlp + ffmpeg + MediaPipe (offline Python pipeline, wrapped by backend API)
 - **Scoring**: Joint angle comparison + Dynamic Time Warping
 - **Webcam**: WebRTC getUserMedia
+- **Recording**: MediaRecorder API (Phase 3)
 - **Rendering**: HTML5 Canvas
-- **Testing**: Vitest for unit tests, Playwright for e2e tests
+- **Testing**: Vitest for unit tests, Playwright for e2e tests (with visual regression in Phase 5)
 
 ## Project Conventions
 
 ### Architecture
-- Everything runs client-side in the browser — no backend needed
-- Reference video poses are pre-processed offline and served as JSON
+- Phase 0-1: Everything runs client-side in the browser — no backend needed
+- Phase 2+: Lightweight Node.js/Express backend with SQLite for dance library management
+- Reference video poses are pre-processed (offline in Phase 0-1, via backend API in Phase 2+)
 - Only one pose estimator runs during gameplay (on webcam feed)
 - Scoring uses joint angles (position/scale invariant), not absolute coordinates
+- Backend wraps Python pipeline (yt-dlp + MediaPipe) behind REST API
+- Both browser and offline use MediaPipe BlazePose (same model family) for consistency
+- Offline pipeline includes post-processing: outlier rejection, interpolation, adaptive smoothing
+- Pose data format: 17 keypoints (MoveNet-compatible), normalized [0,1] coordinates + visibility score
 
 ### Scoring System (Hybrid)
 1. **During dance**: Detect key/dramatic poses in real-time, flash feedback on hits
@@ -65,6 +73,7 @@ Open-source, web-based dance game where anyone can dance along to any video with
     "npm run build",
     "npm run test",
     "npm run test:e2e",
+    "npm run server",
     "npx vitest",
     "npx playwright test",
     "python scripts/*.py",

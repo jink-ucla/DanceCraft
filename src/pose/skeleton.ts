@@ -1,29 +1,49 @@
 /**
- * Skeleton connection pairs for MoveNet keypoints.
+ * Skeleton connection pairs for MediaPipe BlazePose 33 landmarks.
  * Each pair is [keypointIndexA, keypointIndexB].
  */
 export const SKELETON_CONNECTIONS: [number, number][] = [
   // Torso
-  [5, 6],   // left_shoulder - right_shoulder
-  [5, 11],  // left_shoulder - left_hip
-  [6, 12],  // right_shoulder - right_hip
-  [11, 12], // left_hip - right_hip
+  [11, 12], // left_shoulder - right_shoulder
+  [11, 23], // left_shoulder - left_hip
+  [12, 24], // right_shoulder - right_hip
+  [23, 24], // left_hip - right_hip
 
   // Left arm
-  [5, 7],   // left_shoulder - left_elbow
-  [7, 9],   // left_elbow - left_wrist
+  [11, 13], // left_shoulder - left_elbow
+  [13, 15], // left_elbow - left_wrist
 
   // Right arm
-  [6, 8],   // right_shoulder - right_elbow
-  [8, 10],  // right_elbow - right_wrist
+  [12, 14], // right_shoulder - right_elbow
+  [14, 16], // right_elbow - right_wrist
+
+  // Left hand
+  [15, 17], // left_wrist - left_pinky
+  [15, 19], // left_wrist - left_index
+  [15, 21], // left_wrist - left_thumb
+
+  // Right hand
+  [16, 18], // right_wrist - right_pinky
+  [16, 20], // right_wrist - right_index
+  [16, 22], // right_wrist - right_thumb
 
   // Left leg
-  [11, 13], // left_hip - left_knee
-  [13, 15], // left_knee - left_ankle
+  [23, 25], // left_hip - left_knee
+  [25, 27], // left_knee - left_ankle
 
   // Right leg
-  [12, 14], // right_hip - right_knee
-  [14, 16], // right_knee - right_ankle
+  [24, 26], // right_hip - right_knee
+  [26, 28], // right_knee - right_ankle
+
+  // Left foot
+  [27, 29], // left_ankle - left_heel
+  [27, 31], // left_ankle - left_foot_index
+  [29, 31], // left_heel - left_foot_index
+
+  // Right foot
+  [28, 30], // right_ankle - right_heel
+  [28, 32], // right_ankle - right_foot_index
+  [30, 32], // right_heel - right_foot_index
 ]
 
 /** Colors for different body regions */
