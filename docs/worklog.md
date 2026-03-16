@@ -1,5 +1,18 @@
 # Work Log
 
+## 2026-03-15 - Scoring System Overhaul (Three-Layer Defense)
+
+- Added presence gate (`src/scoring/presence.ts`) — requires 6/8 core keypoints at ≥0.5 confidence
+- Added movement tracker (`src/scoring/movement.ts`) — rolling 1.5s window, blends angular + positional velocity
+- Added spatial comparison (`src/scoring/comparison.ts`) — torso-relative bone direction vectors, blended 60/40 with angle similarity
+- Wired all three layers into DanceMode dance loop — absent/still users get misses
+- Lowered thresholds to compensate for harder scoring (Perfect: 0.80, Good: 0.55, ranks: S≥75%, A≥55%, B≥35%)
+- Updated test fixtures from 17-keypoint to 33-keypoint format
+- Added new test fixtures: BARELY_VISIBLE_POSE, MINIMAL_PRESENCE_POSE, ARMS_FORWARD_POSE, standing/dancing sequences
+- Added presence.test.ts (6 tests) and movement.test.ts (7 tests)
+- Updated existing tests for new thresholds and 33-keypoint format
+- All 73 scoring tests pass, TypeScript compiles clean
+
 ## 2026-03-15 - Phase 7: UX Polish & Practice Mode Redesign
 
 - Replaced stick-figure skeleton with tapered capsule mannequin (distinct body segments with dark outlines)

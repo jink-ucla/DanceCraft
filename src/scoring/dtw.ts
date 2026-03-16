@@ -206,9 +206,9 @@ export function computeBodyPartScores(
  */
 export function computeRank(score: number): 'S' | 'A' | 'B' | 'C' {
   const pct = score * 100
-  if (pct >= 80) return 'S'
-  if (pct >= 60) return 'A'
-  if (pct >= 40) return 'B'
+  if (pct >= 75) return 'S'
+  if (pct >= 55) return 'A'
+  if (pct >= 35) return 'B'
   return 'C'
 }
 

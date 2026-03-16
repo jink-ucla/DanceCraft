@@ -159,24 +159,24 @@ describe('computeBodyPartScores', () => {
 })
 
 describe('computeRank', () => {
-  it('S rank for 80%+', () => {
-    expect(computeRank(0.80)).toBe('S')
+  it('S rank for 75%+', () => {
+    expect(computeRank(0.75)).toBe('S')
     expect(computeRank(0.95)).toBe('S')
     expect(computeRank(1.0)).toBe('S')
   })
 
-  it('A rank for 60-79%', () => {
-    expect(computeRank(0.60)).toBe('A')
-    expect(computeRank(0.79)).toBe('A')
+  it('A rank for 55-74%', () => {
+    expect(computeRank(0.55)).toBe('A')
+    expect(computeRank(0.74)).toBe('A')
   })
 
-  it('B rank for 40-59%', () => {
-    expect(computeRank(0.40)).toBe('B')
-    expect(computeRank(0.59)).toBe('B')
+  it('B rank for 35-54%', () => {
+    expect(computeRank(0.35)).toBe('B')
+    expect(computeRank(0.54)).toBe('B')
   })
 
-  it('C rank for below 40%', () => {
-    expect(computeRank(0.39)).toBe('C')
+  it('C rank for below 35%', () => {
+    expect(computeRank(0.34)).toBe('C')
     expect(computeRank(0.0)).toBe('C')
   })
 })

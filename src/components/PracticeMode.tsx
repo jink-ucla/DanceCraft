@@ -10,6 +10,7 @@ import type { KeyPose, PoseTimeline } from '../scoring/keyPoseDetection'
 import type { Pose, Keypoint } from '../scoring/types'
 import { TargetPoseFigure } from './TargetPoseFigure'
 import { loadDanceSettings, saveDanceSettings, extractYoutubeEmbedId } from '../storage/danceSettings'
+import { getWebcamStream } from './Settings'
 
 type PracticePhase = 'loading' | 'ready' | 'playing' | 'paused' | 'resuming'
 type PracticeTab = 'practice' | 'tutorial'
@@ -269,10 +270,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
           throw new Error('Webcam not available')
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 320, height: 240, facingMode: 'user' },
-          audio: false,
-        })
+        const stream = await getWebcamStream(320, 240)
         streamRef.current = stream
 
         const video = webcamRef.current

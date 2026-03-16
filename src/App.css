@@ -1341,10 +1341,17 @@
   max-width: 600px;
 }
 
-.history-screen h2 {
-  font-size: 24px;
+.history-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   margin-bottom: 24px;
+}
+
+.history-header h2 {
+  font-size: 24px;
   font-weight: 700;
+  margin: 0;
 }
 
 .history-empty {
@@ -1362,29 +1369,65 @@
 
 .history-entry {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
   background: var(--bg-card);
-  padding: 14px 18px;
+  padding: 10px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   transition: border-color 0.15s;
 }
 
-.history-entry:hover {
-  border-color: var(--border-hover);
+.history-entry-clickable {
+  cursor: pointer;
 }
 
-.history-entry-left {
+.history-entry-clickable:hover {
+  border-color: var(--accent);
+  background: rgba(0, 255, 136, 0.03);
+}
+
+.history-thumbnail {
+  width: 64px;
+  height: 48px;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+}
+
+.history-thumbnail-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.history-thumbnail-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.history-entry-info {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  flex: 1;
+  min-width: 0;
 }
 
 .history-dance-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-heading);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .history-date {
@@ -1395,7 +1438,8 @@
 .history-entry-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .history-score {
@@ -1406,12 +1450,39 @@
 }
 
 .history-rank {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
 }
 
+.history-delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: all 0.15s;
+}
+
+.history-delete-btn:hover {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.history-replay-arrow {
+  font-size: 14px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.history-entry-clickable:hover .history-replay-arrow {
+  color: var(--accent);
+}
+
 .history-back-btn {
-  margin-top: 28px;
   padding: 8px 20px;
   background: var(--bg-elevated);
   color: var(--text);
@@ -2322,6 +2393,8 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  position: relative;
+  z-index: 0;
 }
 
 .replay-video-placeholder {
@@ -2374,6 +2447,25 @@
   width: 100%;
 }
 
+.replay-video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.replay-video-wrapper canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
 .replay-video-pip {
   width: 100%;
   display: block;
@@ -2417,8 +2509,8 @@
   height: 24px;
   border-radius: var(--radius-sm);
   overflow: hidden;
-  gap: 1px;
   cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .replay-timeline-segment {
@@ -2439,7 +2531,6 @@
   box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
   z-index: 2;
   pointer-events: none;
-  transition: left 0.1s linear;
 }
 
 .replay-time-display {
@@ -2504,6 +2595,39 @@
 .replay-speed-btn:hover {
   border-color: var(--border-hover);
   color: var(--text-heading);
+}
+
+.replay-toggle-btn {
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.replay-toggle-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-heading);
+}
+
+.replay-toggle-btn.active {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.replay-pose-overlay-full {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .replay-speed-btn.active {

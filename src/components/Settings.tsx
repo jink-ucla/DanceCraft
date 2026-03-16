@@ -9,9 +9,13 @@ export interface AppSettings {
 const SETTINGS_KEY = 'groovy_settings'
 
 export function loadSettings(): AppSettings {
-  const stored = localStorage.getItem(SETTINGS_KEY)
-  if (stored) {
-    return JSON.parse(stored)
+  try {
+    const stored = localStorage.getItem(SETTINGS_KEY)
+    if (stored) {
+      return { ...{ selectedDeviceId: '', scoringSensitivity: 'normal' as const, mirrorMode: true }, ...JSON.parse(stored) }
+    }
+  } catch {
+    // Corrupt localStorage — return defaults
   }
   return {
     selectedDeviceId: '',
@@ -22,6 +26,39 @@ export function loadSettings(): AppSettings {
 
 export function saveSettings(settings: AppSettings): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+}
+
+/** Build video constraints using the selected camera from settings */
+export function getVideoConstraints(
+  width = 320,
+  height = 240,
+): MediaTrackConstraints {
+  try {
+    const { selectedDeviceId } = loadSettings()
+    if (selectedDeviceId) {
+      return { width, height, deviceId: { exact: selectedDeviceId } }
+    }
+  } catch {
+    // Corrupt settings — fall through to default
+  }
+  return { width, height, facingMode: 'user' }
+}
+
+/** Get webcam stream with fallback: tries selected device, falls back to default */
+export async function getWebcamStream(
+  width = 320,
+  height = 240,
+): Promise<MediaStream> {
+  const constraints = getVideoConstraints(width, height)
+  try {
+    return await navigator.mediaDevices.getUserMedia({ video: constraints, audio: false })
+  } catch {
+    // Selected device may be unavailable — fall back to default
+    return await navigator.mediaDevices.getUserMedia({
+      video: { width, height, facingMode: 'user' },
+      audio: false,
+    })
+  }
 }
 
 interface SettingsProps {

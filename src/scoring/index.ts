@@ -1,5 +1,5 @@
 export { calculateAngle, extractJointAngles } from './angles'
-export { comparePoses } from './comparison'
+export { comparePoses, computeSpatialSimilarity } from './comparison'
 export {
   detectKeyPoses,
   computeAngularVelocity,
@@ -25,3 +25,6 @@ export {
   computePostDanceScore,
 } from './dtw'
 export type { TimestampedPose, DTWResult, SectionScore, BodyPartScore } from './dtw'
+export { checkPresence } from './presence'
+export type { PresenceResult } from './presence'
+export { MovementTracker } from './movement'

@@ -6,8 +6,11 @@ import {
   SKELETON_COLOR,
   KEYPOINT_RADIUS,
 } from '../pose/skeleton'
+import { getWebcamStream } from './Settings'
 import { comparePoses } from '../scoring/comparison'
 import { detectKeyPoses } from '../scoring/keyPoseDetection'
+import { checkPresence } from '../scoring/presence'
+import { MovementTracker } from '../scoring/movement'
 import type { KeyPose, PoseTimeline } from '../scoring/keyPoseDetection'
 import { TargetPoseFigure } from './TargetPoseFigure'
 import type { Pose, Keypoint } from '../scoring/types'
@@ -63,6 +66,12 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
   const nextKeyPoseIdxRef = useRef(0)
   const danceStartTimeRef = useRef(0)
   const totalKeyPosesRef = useRef(0)
+  const movementTrackerRef = useRef(new MovementTracker())
+  // Sync anchor: performance.now() at the exact moment recorder.start() is called.
+  const recordingStartRef = useRef(0)
+  // Sync marker: draw a bright green square for the first N frames so replay can
+  // detect it and compute the exact video↔pose time offset.
+  const syncFrameCountRef = useRef(0)
 
   // Animate displayed score toward actual score
   useEffect(() => {
@@ -143,54 +152,78 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    const refVideo = refVideoRef.current
+    // For game scoring: use refVideo time (synced to music)
+    const elapsed = refVideo ? refVideo.currentTime : (Date.now() - danceStartTimeRef.current) / 1000
+
     const userPose = await estimatePose(video)
-    if (userPose) {
+
+    // Check key pose matches — track target pose display even without user
+    const keyPoses = keyPosesRef.current
+    const nextIdx = nextKeyPoseIdxRef.current
+
+    // Show upcoming target pose with timing (appears 2.5s before, hits at 0)
+    const LEAD_TIME = 2.5
+    if (nextIdx < keyPoses.length) {
+      const nextKP = keyPoses[nextIdx]
+      const timeUntil = nextKP.timestamp - elapsed
+      if (timeUntil <= LEAD_TIME && timeUntil > -0.5) {
+        const progress = Math.min(1, 1 - timeUntil / LEAD_TIME)
+        setTargetPose({ pose: nextKP.pose, progress })
+      } else if (timeUntil > LEAD_TIME) {
+        setTargetPose(null)
+      }
+    } else {
+      setTargetPose(null)
+    }
+
+    // Layer 1: Presence gate — skip scoring if user not sufficiently visible
+    const presence = checkPresence(userPose)
+
+    if (userPose && presence.present) {
       drawPose(ctx, userPose, canvas.width, canvas.height)
 
-      // Draw composite frame for recording (webcam + skeleton overlay)
+      // Draw raw webcam frame to composite canvas for recording.
+      // This happens in the SAME rAF as pose estimation, so the recorded
+      // video frame and pose timestamp are perfectly synchronized.
       const compositeCanvas = compositeCanvasRef.current
       if (compositeCanvas) {
         const cCtx = compositeCanvas.getContext('2d')
         if (cCtx) {
           cCtx.drawImage(video, 0, 0, compositeCanvas.width, compositeCanvas.height)
-          cCtx.drawImage(canvas, 0, 0, compositeCanvas.width, compositeCanvas.height)
+
+          // Draw sync marker for the first 5 frames: a bright green square
+          // in the top-left corner. Replay scans for this to compute the
+          // exact video↔pose time offset.
+          if (syncFrameCountRef.current < 5) {
+            cCtx.fillStyle = '#00FF00'
+            cCtx.fillRect(4, 4, 32, 32)
+            syncFrameCountRef.current++
+          }
         }
       }
 
-      // Use video currentTime for elapsed — stays in sync with music
-      const refVideo = refVideoRef.current
-      const elapsed = refVideo ? refVideo.currentTime : (Date.now() - danceStartTimeRef.current) / 1000
-      onRecordPose?.(userPose, elapsed)
+      // Record pose with timestamp anchored to recording start (performance.now based).
+      // Uses the SAME clock and zero-point as captureStream's frame timestamps,
+      // so pose time T exactly corresponds to video time T during replay.
+      const poseTime = (performance.now() - recordingStartRef.current) / 1000
+      onRecordPose?.(userPose, poseTime)
 
-      // Check key pose matches
-      const keyPoses = keyPosesRef.current
-      const nextIdx = nextKeyPoseIdxRef.current
-
-      // Show upcoming target pose with timing (appears 2.5s before, hits at 0)
-      const LEAD_TIME = 2.5
-      if (nextIdx < keyPoses.length) {
-        const nextKP = keyPoses[nextIdx]
-        const timeUntil = nextKP.timestamp - elapsed
-        if (timeUntil <= LEAD_TIME && timeUntil > -0.5) {
-          // progress: 0 = just appeared, 1 = hit time
-          const progress = Math.min(1, 1 - timeUntil / LEAD_TIME)
-          setTargetPose({ pose: nextKP.pose, progress })
-        } else if (timeUntil > LEAD_TIME) {
-          setTargetPose(null)
-        }
-      } else {
-        setTargetPose(null)
-      }
+      // Layer 2: Feed movement tracker
+      movementTrackerRef.current.addFrame(userPose, elapsed)
+      const movementFactor = movementTrackerRef.current.getMovementFactor()
 
       if (nextIdx < keyPoses.length) {
         const nextKP = keyPoses[nextIdx]
-        const timeDiff = Math.abs(elapsed - nextKP.timestamp)
+        const timeUntilHit = nextKP.timestamp - elapsed
 
-        // Check if we're within the hit window (±0.5 seconds)
-        if (timeDiff <= 0.5) {
+        // Only score when "NOW" is showing (within 0.4s before to 0.5s after the hit time)
+        if (timeUntilHit <= 0.4 && timeUntilHit >= -0.5) {
           const result = comparePoses(nextKP.pose, userPose)
+          // Apply movement factor: standing still → effective score ~0
+          const effectiveScore = result.overallScore * movementFactor
 
-          if (result.overallScore >= 0.85) {
+          if (effectiveScore >= 0.80) {
             showFeedback('perfect')
             setScore((s) => s + 100 * (1 + combo * 0.1))
             setCombo((c) => c + 1)
@@ -198,7 +231,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
             setTotalHits((h) => h + 1)
             setTargetPose(null)
             nextKeyPoseIdxRef.current++
-          } else if (result.overallScore >= 0.65) {
+          } else if (effectiveScore >= 0.55) {
             showFeedback('good')
             setScore((s) => s + 50 * (1 + combo * 0.05))
             setCombo((c) => c + 1)
@@ -227,8 +260,24 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
           nextKeyPoseIdxRef.current++
         }
       }
+    } else {
+      // User not present — let key pose windows expire as misses
+      if (nextIdx < keyPoses.length) {
+        const nextKP = keyPoses[nextIdx]
+        if (elapsed > nextKP.timestamp + 0.5) {
+          showFeedback('miss')
+          setCombo((c) => {
+            if (c > 1) setComboBroke(true)
+            return 0
+          })
+          setTargetPose(null)
+          nextKeyPoseIdxRef.current++
+        }
+      }
+    }
 
-      // Check if dance is over
+    // Check if dance is over
+    {
       const videoEnded = refVideo && refVideo.ended
       const pastLastPose = nextIdx >= keyPoses.length &&
         elapsed > keyPoses[keyPoses.length - 1]?.timestamp + 2
@@ -273,10 +322,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
           throw new Error('Webcam not available')
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 320, height: 240, facingMode: 'user' },
-          audio: false,
-        })
+        const stream = await getWebcamStream(320, 240)
         streamRef.current = stream
 
         const video = webcamRef.current
@@ -331,7 +377,9 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
     }
   }, [referencePoseUrl])
 
-  // Start recording from composite canvas
+  // Start recording from composite canvas (raw webcam, no skeleton).
+  // Using canvas captureStream ensures the recorded video frame and pose timestamp
+  // are from the same rAF callback — perfectly synchronized.
   const startRecording = useCallback(() => {
     const compositeCanvas = compositeCanvasRef.current
     if (!compositeCanvas) return
@@ -356,6 +404,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
         }
       }
       recorder.start(1000) // collect data every second
+      recordingStartRef.current = performance.now() // sync anchor — same clock as captureStream
       mediaRecorderRef.current = recorder
     } catch {
       // Graceful degradation: recording fails silently, dance continues
@@ -363,18 +412,24 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
     }
   }, [])
 
-  // Stop recording and produce blob
-  const stopRecording = useCallback(() => {
-    const recorder = mediaRecorderRef.current
-    if (!recorder || recorder.state === 'inactive') return
+  // Stop recording and produce blob — returns a promise that resolves when blob is ready
+  const stopRecording = useCallback((): Promise<void> => {
+    return new Promise((resolve) => {
+      const recorder = mediaRecorderRef.current
+      if (!recorder || recorder.state === 'inactive') {
+        resolve()
+        return
+      }
 
-    recorder.onstop = () => {
-      const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType })
-      onRecordingComplete?.(blob)
-      recordedChunksRef.current = []
-    }
-    recorder.stop()
-    mediaRecorderRef.current = null
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType })
+        onRecordingComplete?.(blob)
+        recordedChunksRef.current = []
+        resolve()
+      }
+      recorder.stop()
+      mediaRecorderRef.current = null
+    })
   }, [onRecordingComplete])
 
   // Countdown timer
@@ -385,6 +440,8 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
       setPhase('dancing')
       danceStartTimeRef.current = Date.now()
       nextKeyPoseIdxRef.current = 0
+      movementTrackerRef.current.reset()
+      syncFrameCountRef.current = 0
       // Start reference video playback with audio
       if (refVideoRef.current) {
         refVideoRef.current.currentTime = 0
@@ -402,16 +459,16 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
     return () => clearTimeout(timer)
   }, [phase, countdown, danceLoop, volume])
 
-  // Handle finish
+  // Handle finish — wait for recording blob before calling onFinish
   useEffect(() => {
-    if (phase === 'finished') {
-      cancelAnimationFrame(animFrameRef.current)
-      if (refVideoRef.current) {
-        refVideoRef.current.pause()
-      }
-      stopRecording()
-      onFinish?.(score, totalHits, totalKeyPosesRef.current)
+    if (phase !== 'finished') return
+    cancelAnimationFrame(animFrameRef.current)
+    if (refVideoRef.current) {
+      refVideoRef.current.pause()
     }
+    stopRecording().then(() => {
+      onFinish?.(score, totalHits, totalKeyPosesRef.current)
+    })
   }, [phase, score, totalHits, onFinish, stopRecording])
 
   if (error) {

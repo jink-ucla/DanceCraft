@@ -66,17 +66,41 @@ All foundation, polish, library, recording/replay, practice mode, and testing ph
 - Three-dot menu icon centered — **COMPLETE**
 - Cleaned up stale data (9 orphan dance folders removed) — **COMPLETE**
 
+## Scoring System Overhaul (COMPLETE - 2026-03-15)
+
+Three-layer defense against inflated scores (absent/still users getting "Perfect"):
+
+### Layer 1: Presence Gate
+- `checkPresence()` in `src/scoring/presence.ts` — requires 6 of 8 core keypoints visible at ≥0.5 confidence
+- If user not present, key pose windows expire as misses
+
+### Layer 2: Movement Energy Gate
+- `MovementTracker` class in `src/scoring/movement.ts` — rolling 1.5s window
+- Blends angular velocity (60%) + torso-normalized positional velocity (40%)
+- Movement factor (0-1) multiplied into similarity scores before threshold checks
+- Standing still → factor ~0 → always a miss
+
+### Layer 3: Torso-Relative Spatial Comparison
+- `computeSpatialSimilarity()` in `src/scoring/comparison.ts`
+- Compares 8 bone segment direction vectors relative to torso frame
+- Blended: `overallScore = 0.6 * angleScore + 0.4 * spatialScore`
+- Catches poses with similar angles but different spatial configs (arms forward vs arms back)
+
+### Threshold Adjustments
+- Perfect: 0.85 → 0.80, Good: 0.65 → 0.55
+- Rank thresholds: S ≥75%, A ≥55%, B ≥35%
+
 ## Known Bugs
 
 None currently tracked.
 
 ## Test Summary
 
-- 181 unit tests (Vitest) — all passing
+- Unit tests (Vitest) — all passing
 - 65+ e2e tests (Playwright) — all passing
 
 ## What's Next
 
 - Multi-person tracking (plan in docs/plans/multi-person-tracking.md)
 - History → replay (persist session data for later playback)
-- Score calibration with 33-landmark data
+- Threshold tuning based on playtesting

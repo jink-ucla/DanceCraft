@@ -32,9 +32,9 @@ describe('calculateAngle', () => {
 })
 
 describe('extractJointAngles', () => {
-  it('extracts 8 joint angles from a full-confidence standing pose', () => {
+  it('extracts 12 joint angles from a full-confidence standing pose', () => {
     const angles = extractJointAngles(STANDING_POSE)
-    expect(angles.length).toBe(8)
+    expect(angles.length).toBe(12)
     const names = angles.map((a) => a.name)
     expect(names).toContain('left_elbow')
     expect(names).toContain('right_elbow')
@@ -86,7 +86,8 @@ describe('extractJointAngles', () => {
   it('confidence reflects the minimum keypoint score', () => {
     const angles = extractJointAngles(STANDING_POSE)
     for (const a of angles) {
-      expect(a.confidence).toBe(0.9)
+      // Core joints have score 0.9, wrist/ankle joints have min 0.8 (from index/foot_index keypoints)
+      expect(a.confidence).toBeGreaterThanOrEqual(0.8)
     }
   })
 })

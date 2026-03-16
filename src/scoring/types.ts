@@ -23,6 +23,8 @@ export interface JointScore {
 export interface PoseComparisonResult {
   jointScores: JointScore[]
   overallScore: number // 0-1
+  angleScore: number // 0-1, angle-only similarity
+  spatialScore: number // 0-1, torso-relative bone direction similarity
 }
 
 // Full MediaPipe BlazePose 33 landmarks

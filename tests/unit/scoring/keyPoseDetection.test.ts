@@ -237,7 +237,7 @@ describe('detectKeyPoses', () => {
       expect(kp.timestamp).toBeGreaterThanOrEqual(0)
       expect(['held', 'transition', 'distinctive']).toContain(kp.type)
       expect(kp.tolerance).toBeGreaterThan(0)
-      expect(kp.pose.keypoints.length).toBe(17)
+      expect(kp.pose.keypoints.length).toBe(33)
     }
   })
 

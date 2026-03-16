@@ -7,6 +7,7 @@ import {
   KEYPOINT_RADIUS,
 } from '../pose/skeleton'
 import type { Pose } from '../scoring/types'
+import { getWebcamStream } from './Settings'
 
 type WebcamStatus = 'loading' | 'ready' | 'denied' | 'unavailable' | 'error'
 
@@ -92,10 +93,7 @@ export function WebcamPose() {
       }
 
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480, facingMode: 'user' },
-          audio: false,
-        })
+        stream = await getWebcamStream(640, 480)
 
         const video = videoRef.current
         if (!video) return
