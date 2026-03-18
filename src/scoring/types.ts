@@ -20,11 +20,34 @@ export interface JointScore {
   similarity: number // 0-1
 }
 
+export interface JointDeduction {
+  name: string
+  penalty: number // 0-100, points lost
+  isFocus: boolean
+  similarity: number // 0-1, the raw similarity
+}
+
 export interface PoseComparisonResult {
   jointScores: JointScore[]
   overallScore: number // 0-1
   angleScore: number // 0-1, angle-only similarity
   spatialScore: number // 0-1, torso-relative bone direction similarity
+  /** Deduction-based view: start at 100, subtract penalties per joint */
+  deductions: JointDeduction[]
+  /** Final deduction score: 100 minus total penalties, clamped to 0 */
+  deductionScore: number
+}
+
+/** Body part groups for focus joint classification */
+export const BODY_PART_JOINTS: Record<string, string[]> = {
+  arms: ['left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder', 'left_wrist', 'right_wrist'],
+  legs: ['left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle'],
+}
+
+/** Bone segments grouped by body part for spatial focus weighting */
+export const BODY_PART_BONES: Record<string, string[]> = {
+  arms: ['left_upper_arm', 'right_upper_arm', 'left_lower_arm', 'right_lower_arm'],
+  legs: ['left_upper_leg', 'right_upper_leg', 'left_lower_leg', 'right_lower_leg'],
 }
 
 // Full MediaPipe BlazePose 33 landmarks

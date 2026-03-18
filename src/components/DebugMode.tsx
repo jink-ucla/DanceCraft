@@ -141,15 +141,32 @@ export function DebugMode({ referencePoseUrl, referenceVideoUrl, danceName, danc
 
     if (showKeyPoses) {
       for (const kp of keyPoses) {
+        const isMove = kp.type === 'move'
+        const windowSize = isMove ? (kp.moveWindow ?? 0.3) : 0.3
         const diff = Math.abs(kp.timestamp - time)
-        if (diff < 0.3) {
-          ctx.strokeStyle = kp.type === 'held' ? '#ffcc00' : kp.type === 'transition' ? '#00ccff' : '#ff88ff'
-          ctx.lineWidth = 4
+        if (diff < windowSize) {
+          const typeColors: Record<string, string> = {
+            held: '#ffcc00',
+            transition: '#00ccff',
+            distinctive: '#ff88ff',
+            move: '#ff8800',
+          }
+          ctx.strokeStyle = typeColors[kp.type] ?? '#ff88ff'
+          ctx.lineWidth = isMove ? 5 : 4
           ctx.strokeRect(offsetX + 2, offsetY + 2, renderedW - 4, renderedH - 4)
 
           ctx.fillStyle = ctx.strokeStyle
           ctx.font = 'bold 14px monospace'
-          ctx.fillText(`KEY POSE: ${kp.type}`, 12, 24)
+          const label = isMove
+            ? `MOVE: ${kp.focusArea ?? 'full'}`
+            : `KEY POSE: ${kp.type}`
+          ctx.fillText(label, 12, 24)
+
+          // Show focus joints for moves
+          if (isMove && kp.focusJoints && kp.focusJoints.length > 0) {
+            ctx.font = '12px monospace'
+            ctx.fillText(`focus: ${kp.focusJoints.join(', ')}`, 12, 42)
+          }
           break
         }
       }
@@ -197,12 +214,33 @@ export function DebugMode({ referencePoseUrl, referenceVideoUrl, danceName, danc
   }
 
   const jumpToKeyPose = (kp: KeyPose) => {
-    setCurrentTime(kp.timestamp)
     setActiveKeyPose(kp)
     if (videoRef.current) {
-      videoRef.current.currentTime = kp.timestamp
-      videoRef.current.pause()
-      setIsPlaying(false)
+      if (kp.type === 'move' && kp.moveWindow) {
+        // For moves: play the segment from start to end of the move window
+        const startTime = Math.max(0, kp.timestamp - kp.moveWindow)
+        videoRef.current.currentTime = startTime
+        setCurrentTime(startTime)
+        videoRef.current.play()
+        setIsPlaying(true)
+
+        // Stop playback after the move window ends
+        const endTime = kp.timestamp + kp.moveWindow
+        const checkEnd = () => {
+          if (videoRef.current && videoRef.current.currentTime >= endTime) {
+            videoRef.current.pause()
+            setIsPlaying(false)
+            videoRef.current.removeEventListener('timeupdate', checkEnd)
+          }
+        }
+        videoRef.current.addEventListener('timeupdate', checkEnd)
+      } else {
+        // Static poses: jump and pause
+        videoRef.current.currentTime = kp.timestamp
+        setCurrentTime(kp.timestamp)
+        videoRef.current.pause()
+        setIsPlaying(false)
+      }
     }
   }
 
@@ -462,10 +500,25 @@ export function DebugMode({ referencePoseUrl, referenceVideoUrl, danceName, danc
                 className={`debug-keypose-card ${activeKeyPose === kp ? 'debug-keypose-card-active' : ''}`}
               >
                 <div className="edit-keypose-card-top" onClick={() => jumpToKeyPose(kp)}>
-                  <TargetPoseFigure pose={kp.pose} size={60} />
+                  <div className="edit-keypose-figure-wrapper">
+                    <TargetPoseFigure pose={kp.pose} size={60} />
+                    {kp.type === 'move' && (
+                      <div className="edit-keypose-move-badge">MOVE</div>
+                    )}
+                  </div>
                   <div className="debug-keypose-info">
                     <span className={`debug-keypose-type debug-keypose-type-${kp.type}`}>{kp.type}</span>
                     <span className="debug-keypose-time">{formatTime(kp.timestamp)}</span>
+                    {kp.focusArea && (
+                      <span className={`edit-keypose-focus edit-keypose-focus-${kp.focusArea}`}>
+                        {kp.focusArea}
+                      </span>
+                    )}
+                    {kp.type === 'move' && kp.moveWindow && (
+                      <span className="edit-keypose-play-hint">
+                        {(kp.moveWindow * 2).toFixed(1)}s — click to play
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="edit-keypose-actions">
@@ -513,6 +566,10 @@ export function DebugMode({ referencePoseUrl, referenceVideoUrl, danceName, danc
             <div className="debug-stat">
               <span className="debug-stat-value">{keyPoses.filter(k => k.type === 'distinctive').length}</span>
               <span className="debug-stat-label">Distinctive</span>
+            </div>
+            <div className="debug-stat">
+              <span className="debug-stat-value">{keyPoses.filter(k => k.type === 'move').length}</span>
+              <span className="debug-stat-label">Move</span>
             </div>
           </div>
         </div>

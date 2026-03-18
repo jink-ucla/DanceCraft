@@ -3,9 +3,11 @@ import {
   SKELETON_CONNECTIONS,
   KEYPOINT_RADIUS,
 } from '../pose/skeleton'
-import type { Keypoint } from '../scoring/types'
+import type { Keypoint, PoseComparisonResult } from '../scoring/types'
+import { JOINT_DEFINITIONS } from '../scoring/types'
 import type { TimestampedPose, SectionScore } from '../scoring/dtw'
 import { computePostDanceScore } from '../scoring/dtw'
+import { comparePoses } from '../scoring/comparison'
 import { TargetPoseFigure } from './TargetPoseFigure'
 import { loadDanceSettings } from '../storage/danceSettings'
 import { detectKeyPoses } from '../scoring/keyPoseDetection'
@@ -118,6 +120,94 @@ function drawSkeletonOnCanvas(
   }
 }
 
+/**
+ * Map joint names to the skeleton connection indices they affect.
+ * Used to color-code skeleton bones by per-joint score.
+ * Each joint "owns" the bone segments around its vertex keypoint.
+ */
+const JOINT_TO_CONNECTIONS: Record<string, number[]> = {
+  // Arms
+  left_shoulder: [4],       // left_shoulder - left_elbow
+  right_shoulder: [6],      // right_shoulder - right_elbow
+  left_elbow: [4, 5],       // shoulder-elbow, elbow-wrist
+  right_elbow: [6, 7],      // shoulder-elbow, elbow-wrist
+  left_wrist: [5, 8, 9, 10], // elbow-wrist + hand connections
+  right_wrist: [7, 11, 12, 13], // elbow-wrist + hand connections
+  // Legs
+  left_hip: [1, 14],        // shoulder-hip, hip-knee
+  right_hip: [2, 15],       // shoulder-hip, hip-knee
+  left_knee: [14, 16],      // hip-knee, knee-ankle
+  right_knee: [15, 17],     // hip-knee, knee-ankle
+  left_ankle: [16, 18, 19, 20], // knee-ankle + foot
+  right_ankle: [17, 21, 22, 23], // knee-ankle + foot
+}
+
+/** Score to color: green (good) → yellow (ok) → red (bad) */
+function scoreToJointColor(score: number): string {
+  if (score >= 0.75) return '#00ff88' // green
+  if (score >= 0.4) return '#ffcc00'  // yellow
+  return '#ff4444'                     // red
+}
+
+interface ScoringState {
+  result: PoseComparisonResult
+  nearestKeyPose: KeyPose
+  focusArea: string
+}
+
+/** Draw skeleton with per-joint color coding based on scoring */
+function drawScoredSkeleton(
+  ctx: CanvasRenderingContext2D,
+  keypoints: Keypoint[],
+  scoring: ScoringState,
+  canvasWidth: number,
+  canvasHeight: number,
+) {
+  const normalized = isNormalized(keypoints)
+  const sx = normalized ? canvasWidth : 1
+  const sy = normalized ? canvasHeight : 1
+
+  // Build a per-connection color map
+  const connectionColors: (string | null)[] = SKELETON_CONNECTIONS.map(() => null)
+  for (const js of scoring.result.jointScores) {
+    const connIndices = JOINT_TO_CONNECTIONS[js.name]
+    if (!connIndices) continue
+    const color = scoreToJointColor(js.similarity)
+    for (const ci of connIndices) {
+      if (ci < connectionColors.length) {
+        connectionColors[ci] = color
+      }
+    }
+  }
+
+  // Draw connections with per-joint colors
+  ctx.lineWidth = 3
+  for (let ci = 0; ci < SKELETON_CONNECTIONS.length; ci++) {
+    const [i, j] = SKELETON_CONNECTIONS[ci]
+    const kpA = keypoints[i]
+    const kpB = keypoints[j]
+    if (!kpA || !kpB || kpA.score <= 0.3 || kpB.score <= 0.3) continue
+
+    ctx.strokeStyle = connectionColors[ci] ?? 'rgba(255, 255, 255, 0.3)'
+    ctx.beginPath()
+    ctx.moveTo(kpA.x * sx, kpA.y * sy)
+    ctx.lineTo(kpB.x * sx, kpB.y * sy)
+    ctx.stroke()
+  }
+
+  // Draw keypoints — color by nearest joint score
+  for (const kp of keypoints) {
+    if (kp.score <= 0.3) continue
+    // Find if this keypoint is a vertex of any scored joint
+    const jointDef = JOINT_DEFINITIONS.find((d) => d.vertex === kp.name)
+    const js = jointDef ? scoring.result.jointScores.find((s) => s.name === jointDef.name) : null
+    ctx.fillStyle = js ? scoreToJointColor(js.similarity) : 'rgba(255, 255, 255, 0.3)'
+    ctx.beginPath()
+    ctx.arc(kp.x * sx, kp.y * sy, KEYPOINT_RADIUS + 1, 0, 2 * Math.PI)
+    ctx.fill()
+  }
+}
+
 const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2]
 
 export function ReplayMode({
@@ -149,6 +239,8 @@ export function ReplayMode({
   const [showUserSkeleton, setShowUserSkeleton] = useState(true)
   const [showRefSkeleton, setShowRefSkeleton] = useState(false)
   const [syncOffset, setSyncOffset] = useState(0)
+  const [showScoring, setShowScoring] = useState(false)
+  const [currentScoring, setCurrentScoring] = useState<ScoringState | null>(null)
   const syncCalibratedRef = useRef(false)
   const referencePosesRef = useRef<TimestampedPose[]>([])
 
@@ -213,20 +305,35 @@ export function ReplayMode({
 
   // Draw skeleton overlays — each uses its own video's currentTime
   const drawOverlays = useCallback((userTime: number, refTime: number) => {
-    // User skeleton — pose timestamps are anchored to the recording start
-    // (performance.now at recorder.start), same clock as captureStream's frame
-    // timestamps. No offset needed: pose at time T was estimated from the exact
-    // same webcam frame that appears at video time T.
     const userCanvas = userCanvasRef.current
     if (userCanvas) {
       const ctx = userCanvas.getContext('2d')
       if (ctx) {
         ctx.clearRect(0, 0, userCanvas.width, userCanvas.height)
-        if (showUserSkeleton) {
+        if (showUserSkeleton || showScoring) {
           const pose = findClosestPose(userPoses, userTime + syncOffset)
           if (pose) {
-            drawSkeletonOnCanvas(ctx, pose.pose.keypoints as Keypoint[], '#00ccff', userCanvas.width, userCanvas.height)
+            // In scoring mode: color-code skeleton by per-joint score
+            if (showScoring && nearestKeyPose) {
+              const result = comparePoses(nearestKeyPose.pose, pose.pose, {
+                focusJoints: nearestKeyPose.focusJoints,
+              })
+              const scoring: ScoringState = {
+                result,
+                nearestKeyPose,
+                focusArea: nearestKeyPose.focusArea ?? 'full',
+              }
+              setCurrentScoring(scoring)
+              drawScoredSkeleton(ctx, pose.pose.keypoints as Keypoint[], scoring, userCanvas.width, userCanvas.height)
+            } else if (showUserSkeleton) {
+              drawSkeletonOnCanvas(ctx, pose.pose.keypoints as Keypoint[], '#00ccff', userCanvas.width, userCanvas.height)
+              if (!showScoring) setCurrentScoring(null)
+            }
+          } else {
+            setCurrentScoring(null)
           }
+        } else {
+          setCurrentScoring(null)
         }
       }
     }
@@ -245,7 +352,7 @@ export function ReplayMode({
         }
       }
     }
-  }, [userPoses, showUserSkeleton, showRefSkeleton, syncOffset])
+  }, [userPoses, showUserSkeleton, showRefSkeleton, showScoring, syncOffset, nearestKeyPose])
 
   // Update nearest key pose
   useEffect(() => {
@@ -598,6 +705,13 @@ export function ReplayMode({
         >
           Ref Skeleton
         </button>
+        <button
+          className={`replay-toggle-btn ${showScoring ? 'active' : ''}`}
+          onClick={() => setShowScoring((s) => !s)}
+          title="Show per-joint scoring breakdown"
+        >
+          Scoring
+        </button>
         <div className="replay-speed-controls">
           {PLAYBACK_SPEEDS.map((speed) => (
             <button
@@ -610,6 +724,104 @@ export function ReplayMode({
           ))}
         </div>
       </div>
+
+      {/* Scoring breakdown panel */}
+      {showScoring && currentScoring && (
+        <div className="replay-scoring-panel">
+          <div className="replay-scoring-header">
+            <span className="replay-scoring-title">Scoring Breakdown</span>
+            <span className="replay-scoring-focus">
+              Focus: {currentScoring.focusArea === 'full' ? 'Full Body' : currentScoring.focusArea === 'arms' ? 'Arms' : 'Legs'}
+            </span>
+          </div>
+
+          {/* Deduction score — big number */}
+          <div className="replay-scoring-deduction-total">
+            <span
+              className="replay-scoring-big-score"
+              style={{ color: scoreToColor(currentScoring.result.deductionScore / 100) }}
+            >
+              {currentScoring.result.deductionScore}
+            </span>
+            <span className="replay-scoring-big-label">/ 100</span>
+          </div>
+
+          {/* Overall bars */}
+          <div className="replay-scoring-overall">
+            <div className="replay-scoring-bar-row">
+              <span className="replay-scoring-label">Angle</span>
+              <div className="replay-scoring-bar">
+                <div
+                  className="replay-scoring-bar-fill"
+                  style={{
+                    width: `${currentScoring.result.angleScore * 100}%`,
+                    backgroundColor: scoreToColor(currentScoring.result.angleScore),
+                  }}
+                />
+              </div>
+              <span className="replay-scoring-value">{Math.round(currentScoring.result.angleScore * 100)}%</span>
+            </div>
+            <div className="replay-scoring-bar-row">
+              <span className="replay-scoring-label">Spatial</span>
+              <div className="replay-scoring-bar">
+                <div
+                  className="replay-scoring-bar-fill"
+                  style={{
+                    width: `${currentScoring.result.spatialScore * 100}%`,
+                    backgroundColor: scoreToColor(currentScoring.result.spatialScore),
+                  }}
+                />
+              </div>
+              <span className="replay-scoring-value">{Math.round(currentScoring.result.spatialScore * 100)}%</span>
+            </div>
+          </div>
+
+          {/* Deductions — what's costing you points */}
+          {currentScoring.result.deductions.length > 0 ? (
+            <div className="replay-scoring-deductions">
+              <div className="replay-scoring-section-label">Deductions</div>
+              {currentScoring.result.deductions.map((d) => (
+                <div key={d.name} className={`replay-scoring-deduction ${d.isFocus ? 'focus' : ''}`}>
+                  <span className="replay-scoring-joint-name">
+                    {d.isFocus ? '* ' : ''}{d.name.replace(/_/g, ' ')}
+                  </span>
+                  <div className="replay-scoring-bar replay-scoring-bar-sm">
+                    <div
+                      className="replay-scoring-bar-fill"
+                      style={{
+                        width: `${d.similarity * 100}%`,
+                        backgroundColor: scoreToJointColor(d.similarity),
+                      }}
+                    />
+                  </div>
+                  <span className="replay-scoring-penalty">-{d.penalty}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="replay-scoring-perfect">No deductions — perfect match!</div>
+          )}
+
+          {/* Joints with no deductions (collapsed) */}
+          {currentScoring.result.jointScores.filter(
+            (js) => !currentScoring.result.deductions.some((d) => d.name === js.name)
+          ).length > 0 && (
+            <div className="replay-scoring-good-joints">
+              {currentScoring.result.jointScores
+                .filter((js) => !currentScoring.result.deductions.some((d) => d.name === js.name))
+                .map((js) => (
+                  <span key={js.name} className="replay-scoring-good-tag">
+                    {js.name.replace(/_/g, ' ')}
+                  </span>
+                ))}
+            </div>
+          )}
+
+          <div className="replay-scoring-formula">
+            100 - penalties (focus: -{currentScoring.result.deductions.filter((d) => d.isFocus).reduce((s, d) => s + d.penalty, 0)}, other: -{currentScoring.result.deductions.filter((d) => !d.isFocus).reduce((s, d) => s + d.penalty, 0)})
+          </div>
+        </div>
+      )}
     </div>
   )
 }

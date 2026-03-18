@@ -1,9 +1,12 @@
 export { calculateAngle, extractJointAngles } from './angles'
-export { comparePoses, computeSpatialSimilarity } from './comparison'
+export { comparePoses, computeSpatialSimilarity, compareMoveVelocity } from './comparison'
+export type { CompareOptions } from './comparison'
 export {
   detectKeyPoses,
   computeAngularVelocity,
   computeDistinctiveness,
+  computeContextDistinctiveness,
+  computeFocusJoints,
 } from './keyPoseDetection'
 export type {
   Keypoint,
@@ -15,7 +18,7 @@ export type {
   KeypointName,
 } from './types'
 export type { PoseTimeline, KeyPose, KeyPoseConfig } from './keyPoseDetection'
-export { KEYPOINT_NAMES, JOINT_DEFINITIONS } from './types'
+export { KEYPOINT_NAMES, JOINT_DEFINITIONS, BODY_PART_JOINTS, BODY_PART_BONES } from './types'
 export {
   computeDTW,
   computeAlignmentScore,

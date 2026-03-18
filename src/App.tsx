@@ -5,6 +5,7 @@ import { DanceMode } from './components/DanceMode'
 import { ResultsScreen } from './components/ResultsScreen'
 import { Settings } from './components/Settings'
 import { History } from './components/History'
+import type { Session } from './components/History'
 import { AddDance } from './components/AddDance'
 import { ReplayMode } from './components/ReplayMode'
 import { PracticeMode } from './components/PracticeMode'
@@ -12,6 +13,7 @@ import { DebugMode } from './components/DebugMode'
 import { computePostDanceScore } from './scoring/dtw'
 import { computeRank } from './scoring/dtw'
 import { saveScore } from './storage/scores'
+import type { Difficulty } from './storage/scores'
 import { loadDanceSettings } from './storage/danceSettings'
 import type { DTWResult, TimestampedPose } from './scoring/dtw'
 import type { Pose } from './scoring/types'
@@ -65,11 +67,12 @@ function apiDanceToDanceInfo(dance: ApiDance): DanceInfo {
 
 type View =
   | { screen: 'home' }
-  | { screen: 'dance'; dance: DanceInfo }
-  | { screen: 'results'; dance: DanceInfo; result: DTWResult }
+  | { screen: 'dance'; dance: DanceInfo; difficulty: Difficulty }
+  | { screen: 'results'; dance: DanceInfo; result: DTWResult; difficulty: Difficulty }
   | { screen: 'settings' }
   | { screen: 'history' }
-  | { screen: 'replay'; dance: DanceInfo; result: DTWResult }
+  | { screen: 'replay'; dance: DanceInfo; result: DTWResult; difficulty: Difficulty }
+  | { screen: 'history-replay'; session: Session; dance: DanceInfo }
   | { screen: 'practice'; dance: DanceInfo }
   | { screen: 'debug'; dance: DanceInfo }
 
@@ -84,6 +87,7 @@ interface ProcessingJob {
 
 function App() {
   const [view, setView] = useState<View>({ screen: 'home' })
+  const [pendingDance, setPendingDance] = useState<DanceInfo | null>(null)
   const [showAddDance, setShowAddDance] = useState(false)
   const [apiDances, setApiDances] = useState<DanceInfo[]>([])
   const [hiddenBundled, setHiddenBundled] = useState<string[]>(() => {
@@ -256,6 +260,7 @@ function App() {
       score: scorePct,
       rank,
       date: new Date().toISOString(),
+      difficulty: view.difficulty,
     })
 
     // Auto-save session to backend (async, non-blocking)
@@ -266,7 +271,8 @@ function App() {
         formData.append('danceId', String(apiId))
         formData.append('score', String(scorePct))
         formData.append('rank', rank)
-        formData.append('poses', JSON.stringify(userPosesRef.current))
+        const posesBlob = new Blob([JSON.stringify(userPosesRef.current)], { type: 'application/json' })
+        formData.append('poses', posesBlob, 'poses.json')
 
         if (recordingBlobRef.current) {
           formData.append('video', recordingBlobRef.current, 'recording.webm')
@@ -278,7 +284,7 @@ function App() {
       }
     }
 
-    setView({ screen: 'results', dance: view.dance, result })
+    setView({ screen: 'results', dance: view.dance, result, difficulty: view.difficulty })
   }, [view])
 
   const handleRecordingComplete = useCallback((blob: Blob) => {
@@ -290,9 +296,47 @@ function App() {
   }, [])
 
   if (view.screen === 'history') {
+    const handleHistoryReplay = (session: Session) => {
+      // Find the dance info for this session
+      const dance = allDances.find(d => d.id === `api-${session.danceId}`)
+      if (dance) {
+        setView({ screen: 'history-replay', session, dance })
+      }
+    }
+
     return (
       <div className="app">
-        <History onBack={() => setView({ screen: 'home' })} />
+        <History
+          apiBase={API_BASE}
+          onBack={() => setView({ screen: 'home' })}
+          onReplay={handleHistoryReplay}
+        />
+      </div>
+    )
+  }
+
+  if (view.screen === 'history-replay') {
+    const { session, dance } = view
+    const userVideoUrl = `${API_BASE}/api/sessions/${session.id}/video`
+    const userPosesUrl = `${API_BASE}/api/sessions/${session.id}/poses`
+
+    return (
+      <div className="app">
+        <ReplayMode
+          referenceVideoUrl={dance.videoUrl}
+          referencePoseUrl={dance.poseDataUrl}
+          danceId={dance.id}
+          userVideoUrl={userVideoUrl}
+          userPosesUrl={userPosesUrl}
+          userPoses={[]}
+          sectionScores={[]}
+          sessionMeta={{
+            date: session.createdAt,
+            score: session.score,
+            rank: session.rank,
+          }}
+          onBack={() => setView({ screen: 'history' })}
+        />
       </div>
     )
   }
@@ -351,7 +395,7 @@ function App() {
             score: view.result.overallScore * 100,
             rank: view.result.rank,
           }}
-          onBack={() => setView({ screen: 'results', dance: view.dance, result: view.result })}
+          onBack={() => setView({ screen: 'results', dance: view.dance, result: view.result, difficulty: view.difficulty })}
         />
       </div>
     )
@@ -368,13 +412,13 @@ function App() {
           onRetry={() => {
             userPosesRef.current = []
             recordingBlobRef.current = null
-            setView({ screen: 'dance', dance: view.dance })
+            setView({ screen: 'dance', dance: view.dance, difficulty: view.difficulty })
           }}
           onHome={() => {
             recordingBlobRef.current = null
             setView({ screen: 'home' })
           }}
-          onReplay={hasRecording ? () => setView({ screen: 'replay', dance: view.dance, result: view.result }) : undefined}
+          onReplay={hasRecording ? () => setView({ screen: 'replay', dance: view.dance, result: view.result, difficulty: view.difficulty }) : undefined}
         />
       </div>
     )
@@ -389,6 +433,7 @@ function App() {
           referenceVideoUrl={view.dance.videoUrl}
           mirrorVideo={danceSettings.mirror}
           customKeyPoses={danceSettings.customKeyPoses}
+          difficulty={view.difficulty}
           onFinish={handleDanceFinish}
           onRecordPose={handleRecordPose}
           onRecordingComplete={handleRecordingComplete}
@@ -408,9 +453,7 @@ function App() {
         loading={dancesLoading}
         error={dancesError}
         onSelectDance={(dance) => {
-          userPosesRef.current = []
-          recordingBlobRef.current = null
-          setView({ screen: 'dance', dance })
+          setPendingDance(dance)
         }}
         onPracticeDance={(dance) => setView({ screen: 'practice', dance })}
         onDeleteDance={handleDeleteDance}
@@ -427,6 +470,38 @@ function App() {
           }}
           onJobStarted={(jobId, youtubeUrl) => trackJob(jobId, undefined, youtubeUrl)}
         />
+      )}
+      {pendingDance && (
+        <div className="difficulty-overlay">
+          <div className="difficulty-modal">
+            <h3 className="difficulty-title">{pendingDance.title}</h3>
+            <p className="difficulty-subtitle">Choose Difficulty</p>
+            <div className="difficulty-options">
+              {(['easy', 'normal', 'hard'] as const).map((d) => (
+                <button
+                  key={d}
+                  className={`difficulty-btn difficulty-btn-${d}`}
+                  onClick={() => {
+                    userPosesRef.current = []
+                    recordingBlobRef.current = null
+                    setView({ screen: 'dance', dance: pendingDance, difficulty: d })
+                    setPendingDance(null)
+                  }}
+                >
+                  <span className="difficulty-btn-label">{d.charAt(0).toUpperCase() + d.slice(1)}</span>
+                  <span className="difficulty-btn-detail">
+                    {d === 'easy' && '1.3s window · forgiving'}
+                    {d === 'normal' && '0.9s window · balanced'}
+                    {d === 'hard' && '0.55s window · precise'}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <button className="difficulty-cancel" onClick={() => setPendingDance(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

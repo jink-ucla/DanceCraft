@@ -7,7 +7,9 @@ import {
   KEYPOINT_RADIUS,
 } from '../pose/skeleton'
 import { getWebcamStream } from './Settings'
-import { comparePoses } from '../scoring/comparison'
+import { comparePoses, compareMoveVelocity } from '../scoring/comparison'
+import type { Difficulty, DifficultyConfig } from '../storage/scores'
+import { DIFFICULTY_CONFIGS } from '../storage/scores'
 import { detectKeyPoses } from '../scoring/keyPoseDetection'
 import { checkPresence } from '../scoring/presence'
 import { MovementTracker } from '../scoring/movement'
@@ -24,6 +26,7 @@ interface DanceModeProps {
   referenceVideoUrl?: string
   mirrorVideo?: boolean
   customKeyPoses?: KeyPose[] | null
+  difficulty?: Difficulty
   onFinish?: (score: number, totalHits: number, totalPoses: number) => void
   onRecordPose?: (pose: Pose, time: number) => void
   onReferencePosesLoaded?: (poses: TimestampedPose[]) => void
@@ -36,7 +39,8 @@ interface FeedbackDisplay {
   timestamp: number
 }
 
-export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, customKeyPoses, onFinish, onRecordPose, onReferencePosesLoaded, onRecordingComplete, onBack }: DanceModeProps) {
+export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, customKeyPoses, difficulty = 'normal', onFinish, onRecordPose, onReferencePosesLoaded, onRecordingComplete, onBack }: DanceModeProps) {
+  const diffConfig: DifficultyConfig = DIFFICULTY_CONFIGS[difficulty]
   const webcamRef = useRef<HTMLVideoElement>(null)
   const refVideoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -162,12 +166,12 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
     const keyPoses = keyPosesRef.current
     const nextIdx = nextKeyPoseIdxRef.current
 
-    // Show upcoming target pose with timing (appears 2.5s before, hits at 0)
-    const LEAD_TIME = 2.5
+    // Show upcoming target pose with timing
+    const LEAD_TIME = diffConfig.leadTime
     if (nextIdx < keyPoses.length) {
       const nextKP = keyPoses[nextIdx]
       const timeUntil = nextKP.timestamp - elapsed
-      if (timeUntil <= LEAD_TIME && timeUntil > -0.5) {
+      if (timeUntil <= LEAD_TIME && timeUntil > -diffConfig.windowAfter) {
         const progress = Math.min(1, 1 - timeUntil / LEAD_TIME)
         setTargetPose({ pose: nextKP.pose, progress })
       } else if (timeUntil > LEAD_TIME) {
@@ -217,13 +221,34 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
         const nextKP = keyPoses[nextIdx]
         const timeUntilHit = nextKP.timestamp - elapsed
 
-        // Only score when "NOW" is showing (within 0.4s before to 0.5s after the hit time)
-        if (timeUntilHit <= 0.4 && timeUntilHit >= -0.5) {
-          const result = comparePoses(nextKP.pose, userPose)
-          // Apply movement factor: standing still → effective score ~0
-          const effectiveScore = result.overallScore * movementFactor
+        // Score within the timing window (configurable by difficulty)
+        if (timeUntilHit <= diffConfig.windowBefore && timeUntilHit >= -diffConfig.windowAfter) {
+          let effectiveScore: number
 
-          if (effectiveScore >= 0.80) {
+          if (nextKP.type === 'move' && nextKP.expectedVelocity) {
+            // Move scoring: blend velocity match (60%) + pose match (40%)
+            const pastPose = movementTrackerRef.current.getRecentPose(nextKP.moveWindow ?? 0.3)
+            const velocityScore = pastPose
+              ? compareMoveVelocity(nextKP.expectedVelocity, pastPose, userPose, nextKP.focusJoints)
+              : 0
+            const poseResult = comparePoses(nextKP.pose, userPose, {
+              focusJoints: nextKP.focusJoints,
+              focusWeight: diffConfig.focusWeight,
+              nonFocusWeight: diffConfig.nonFocusWeight,
+            })
+            effectiveScore = (0.6 * velocityScore + 0.4 * poseResult.overallScore) * movementFactor
+          } else {
+            // Static pose scoring
+            const result = comparePoses(nextKP.pose, userPose, {
+              focusJoints: nextKP.focusJoints,
+              focusWeight: diffConfig.focusWeight,
+              nonFocusWeight: diffConfig.nonFocusWeight,
+            })
+            // Apply movement factor: standing still → effective score ~0
+            effectiveScore = result.overallScore * movementFactor
+          }
+
+          if (effectiveScore >= diffConfig.perfectThreshold) {
             showFeedback('perfect')
             setScore((s) => s + 100 * (1 + combo * 0.1))
             setCombo((c) => c + 1)
@@ -231,7 +256,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
             setTotalHits((h) => h + 1)
             setTargetPose(null)
             nextKeyPoseIdxRef.current++
-          } else if (effectiveScore >= 0.55) {
+          } else if (effectiveScore >= diffConfig.goodThreshold) {
             showFeedback('good')
             setScore((s) => s + 50 * (1 + combo * 0.05))
             setCombo((c) => c + 1)
@@ -239,7 +264,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
             setTotalHits((h) => h + 1)
             setTargetPose(null)
             nextKeyPoseIdxRef.current++
-          } else if (elapsed > nextKP.timestamp + 0.5) {
+          } else if (elapsed > nextKP.timestamp + diffConfig.windowAfter) {
             // Missed — past the window
             showFeedback('miss')
             setCombo((c) => {
@@ -249,7 +274,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
             setTargetPose(null)
             nextKeyPoseIdxRef.current++
           }
-        } else if (elapsed > nextKP.timestamp + 0.5) {
+        } else if (elapsed > nextKP.timestamp + diffConfig.windowAfter) {
           // Completely missed
           showFeedback('miss')
           setCombo((c) => {

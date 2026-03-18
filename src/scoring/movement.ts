@@ -91,6 +91,24 @@ export class MovementTracker {
     return this.getMovementEnergy() >= ENERGY_THRESHOLD
   }
 
+  /** Get the pose from approximately `secondsAgo` before the latest frame */
+  getRecentPose(secondsAgo: number): Pose | null {
+    if (this.frames.length === 0) return null
+    const latest = this.frames[this.frames.length - 1]
+    const targetTime = latest.time - secondsAgo
+
+    let closest: FrameEntry | null = null
+    let closestDiff = Infinity
+    for (const f of this.frames) {
+      const diff = Math.abs(f.time - targetTime)
+      if (diff < closestDiff) {
+        closestDiff = diff
+        closest = f
+      }
+    }
+    return closest && closestDiff < 0.2 ? closest.pose : null
+  }
+
   reset(): void {
     this.frames = []
   }
