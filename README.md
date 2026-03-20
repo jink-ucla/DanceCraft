@@ -2,6 +2,8 @@
 
 Open-source, browser-based dance game. Dance along to any YouTube video with real-time pose detection, scoring, and post-dance replay review. Think "Just Dance" but for any video, running entirely in the browser.
 
+![Groovy app screenshot](docs/images/app-screenshot.png)
+
 ## How It Works
 
 1. **Add a dance** — paste any YouTube URL (regular videos or Shorts) and Groovy downloads it, extracts the reference poses offline using MediaPipe BlazePose Heavy
