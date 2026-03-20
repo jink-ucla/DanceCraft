@@ -793,41 +793,41 @@ export function ReplayMode({
             </div>
           </div>
 
-          {/* All joints — always shown, grayed out when no deduction */}
+          {/* All joints — always rendered for stable height, grayed out when inactive */}
           <div className="replay-scoring-deductions">
             <div className="replay-scoring-section-label">Joints</div>
-            {currentScoring ? currentScoring.result.jointScores.map((js) => {
-              const deduction = currentScoring.result.deductions.find((d) => d.name === js.name)
+            {JOINT_DEFINITIONS.map((jd) => {
+              const js = currentScoring?.result.jointScores.find((s) => s.name === jd.name)
+              const deduction = currentScoring?.result.deductions.find((d) => d.name === jd.name)
+              const active = !!js
               const hasDeduction = !!deduction
               return (
-                <div key={js.name} className={`replay-scoring-deduction ${hasDeduction ? (deduction.isFocus ? 'focus' : '') : 'good'}`}>
-                  <span className="replay-scoring-joint-name" style={{ opacity: hasDeduction ? 1 : 0.4 }}>
-                    {deduction?.isFocus ? '* ' : ''}{js.name.replace(/_/g, ' ')}
+                <div key={jd.name} className={`replay-scoring-deduction ${hasDeduction ? (deduction.isFocus ? 'focus' : '') : 'good'}`} style={{ opacity: active ? 1 : 0.25 }}>
+                  <span className="replay-scoring-joint-name">
+                    {deduction?.isFocus ? '* ' : ''}{jd.name.replace(/_/g, ' ')}
                   </span>
                   <div className="replay-scoring-bar replay-scoring-bar-sm">
                     <div
                       className="replay-scoring-bar-fill"
                       style={{
-                        width: `${js.similarity * 100}%`,
-                        backgroundColor: hasDeduction ? scoreToJointColor(js.similarity) : 'rgba(0, 255, 136, 0.3)',
+                        width: active ? `${js!.similarity * 100}%` : '0%',
+                        backgroundColor: hasDeduction ? scoreToJointColor(js!.similarity) : 'rgba(0, 255, 136, 0.3)',
                       }}
                     />
                   </div>
-                  <span className="replay-scoring-penalty" style={{ opacity: hasDeduction ? 1 : 0.3 }}>
-                    {hasDeduction ? `-${deduction.penalty}` : '0'}
+                  <span className="replay-scoring-penalty">
+                    {hasDeduction ? `-${deduction.penalty}` : active ? '0' : '—'}
                   </span>
                 </div>
               )
-            }) : (
-              <div className="replay-scoring-perfect" style={{ opacity: 0.3 }}>Move near a key pose to see scores</div>
-            )}
+            })}
           </div>
 
-          {currentScoring && (
-            <div className="replay-scoring-formula">
-              100 - penalties (focus: -{currentScoring.result.deductions.filter((d) => d.isFocus).reduce((s, d) => s + d.penalty, 0)}, other: -{currentScoring.result.deductions.filter((d) => !d.isFocus).reduce((s, d) => s + d.penalty, 0)})
-            </div>
-          )}
+          <div className="replay-scoring-formula" style={{ opacity: currentScoring ? 1 : 0.25 }}>
+            {currentScoring
+              ? `100 - penalties (focus: -${currentScoring.result.deductions.filter((d) => d.isFocus).reduce((s, d) => s + d.penalty, 0)}, other: -${currentScoring.result.deductions.filter((d) => !d.isFocus).reduce((s, d) => s + d.penalty, 0)})`
+              : '100 - penalties (focus: -0, other: -0)'}
+          </div>
         </div>
       )}
     </div>
