@@ -7,3 +7,6 @@ playwright-report
 *.tsbuildinfo
 .env
 data/
+.venv/
+.DS_Store
+scripts/pose_landmarker_heavy.task
