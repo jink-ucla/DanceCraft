@@ -6,7 +6,7 @@ type ModalState =
   | { step: 'success'; title: string }
   | { step: 'error'; message: string }
 
-const YOUTUBE_URL_REGEX = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|m\.youtube\.com\/watch\?v=)/
+const YOUTUBE_URL_REGEX = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/|m\.youtube\.com\/watch\?v=)/
 
 interface AddDanceProps {
   onClose: () => void
@@ -109,11 +109,11 @@ export function AddDance({ onClose, onDanceAdded, onJobStarted, apiBase = 'http:
 
         {state.step === 'input' && (
           <>
-            <p className="add-dance-desc">Paste a YouTube URL to add a dance to your library.</p>
+            <p className="add-dance-desc">Paste a YouTube URL or Shorts link to add a dance to your library.</p>
             <input
               className="add-dance-input"
               type="url"
-              placeholder="https://youtube.com/watch?v=..."
+              placeholder="https://youtube.com/watch?v=... or /shorts/..."
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && isValidUrl) handleSubmit() }}

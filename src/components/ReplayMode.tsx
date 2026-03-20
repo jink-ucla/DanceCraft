@@ -241,6 +241,7 @@ export function ReplayMode({
   const [syncOffset, setSyncOffset] = useState(0)
   const [showScoring, setShowScoring] = useState(false)
   const [currentScoring, setCurrentScoring] = useState<ScoringState | null>(null)
+  const mirrorRef = danceId ? loadDanceSettings(danceId).mirror : false
   const syncCalibratedRef = useRef(false)
   const referencePosesRef = useRef<TimestampedPose[]>([])
 
@@ -452,6 +453,15 @@ export function ReplayMode({
     video.currentTime = 0
   }, [userPoses])
 
+  // Re-run sync calibration when user poses arrive (history replay: poses load async after video)
+  useEffect(() => {
+    if (syncCalibratedRef.current || userPoses.length === 0) return
+    const userVideo = userVideoRef.current
+    if (userVideo && userVideo.readyState >= 1) {
+      calibrateSync(userVideo)
+    }
+  }, [userPoses, calibrateSync])
+
   const handleUserVideoLoaded = useCallback(() => {
     const userVideo = userVideoRef.current
     const canvas = userCanvasRef.current
@@ -591,6 +601,7 @@ export function ReplayMode({
               playsInline
               muted
               preload="auto"
+              style={mirrorRef ? { transform: 'scaleX(-1)' } : undefined}
               onLoadedMetadata={() => {
                 handleRefVideoLoaded()
                 if (refVideoRef.current) refVideoRef.current.playbackRate = playbackSpeed
@@ -602,6 +613,7 @@ export function ReplayMode({
           <canvas
             ref={refCanvasRef}
             className="replay-pose-overlay"
+            style={mirrorRef ? { transform: 'scaleX(-1)' } : undefined}
           />
         </div>
 
@@ -623,6 +635,7 @@ export function ReplayMode({
           <video
             ref={userVideoRef}
             src={userVideoUrl}
+            crossOrigin="anonymous"
             className={swapped ? 'replay-video-full' : 'replay-video-pip'}
             playsInline
             muted
@@ -726,12 +739,12 @@ export function ReplayMode({
       </div>
 
       {/* Scoring breakdown panel */}
-      {showScoring && currentScoring && (
+      {showScoring && (
         <div className="replay-scoring-panel">
           <div className="replay-scoring-header">
             <span className="replay-scoring-title">Scoring Breakdown</span>
-            <span className="replay-scoring-focus">
-              Focus: {currentScoring.focusArea === 'full' ? 'Full Body' : currentScoring.focusArea === 'arms' ? 'Arms' : 'Legs'}
+            <span className="replay-scoring-focus" style={{ opacity: currentScoring ? 1 : 0.3 }}>
+              Focus: {currentScoring ? (currentScoring.focusArea === 'full' ? 'Full Body' : currentScoring.focusArea === 'arms' ? 'Arms' : 'Legs') : '—'}
             </span>
           </div>
 
@@ -739,9 +752,9 @@ export function ReplayMode({
           <div className="replay-scoring-deduction-total">
             <span
               className="replay-scoring-big-score"
-              style={{ color: scoreToColor(currentScoring.result.deductionScore / 100) }}
+              style={{ color: currentScoring ? scoreToColor(currentScoring.result.deductionScore / 100) : 'var(--text-secondary)', opacity: currentScoring ? 1 : 0.3 }}
             >
-              {currentScoring.result.deductionScore}
+              {currentScoring ? currentScoring.result.deductionScore : '—'}
             </span>
             <span className="replay-scoring-big-label">/ 100</span>
           </div>
@@ -754,12 +767,14 @@ export function ReplayMode({
                 <div
                   className="replay-scoring-bar-fill"
                   style={{
-                    width: `${currentScoring.result.angleScore * 100}%`,
-                    backgroundColor: scoreToColor(currentScoring.result.angleScore),
+                    width: currentScoring ? `${currentScoring.result.angleScore * 100}%` : '0%',
+                    backgroundColor: currentScoring ? scoreToColor(currentScoring.result.angleScore) : 'var(--text-secondary)',
                   }}
                 />
               </div>
-              <span className="replay-scoring-value">{Math.round(currentScoring.result.angleScore * 100)}%</span>
+              <span className="replay-scoring-value" style={{ opacity: currentScoring ? 1 : 0.3 }}>
+                {currentScoring ? `${Math.round(currentScoring.result.angleScore * 100)}%` : '—'}
+              </span>
             </div>
             <div className="replay-scoring-bar-row">
               <span className="replay-scoring-label">Spatial</span>
@@ -767,59 +782,52 @@ export function ReplayMode({
                 <div
                   className="replay-scoring-bar-fill"
                   style={{
-                    width: `${currentScoring.result.spatialScore * 100}%`,
-                    backgroundColor: scoreToColor(currentScoring.result.spatialScore),
+                    width: currentScoring ? `${currentScoring.result.spatialScore * 100}%` : '0%',
+                    backgroundColor: currentScoring ? scoreToColor(currentScoring.result.spatialScore) : 'var(--text-secondary)',
                   }}
                 />
               </div>
-              <span className="replay-scoring-value">{Math.round(currentScoring.result.spatialScore * 100)}%</span>
+              <span className="replay-scoring-value" style={{ opacity: currentScoring ? 1 : 0.3 }}>
+                {currentScoring ? `${Math.round(currentScoring.result.spatialScore * 100)}%` : '—'}
+              </span>
             </div>
           </div>
 
-          {/* Deductions — what's costing you points */}
-          {currentScoring.result.deductions.length > 0 ? (
-            <div className="replay-scoring-deductions">
-              <div className="replay-scoring-section-label">Deductions</div>
-              {currentScoring.result.deductions.map((d) => (
-                <div key={d.name} className={`replay-scoring-deduction ${d.isFocus ? 'focus' : ''}`}>
-                  <span className="replay-scoring-joint-name">
-                    {d.isFocus ? '* ' : ''}{d.name.replace(/_/g, ' ')}
+          {/* All joints — always shown, grayed out when no deduction */}
+          <div className="replay-scoring-deductions">
+            <div className="replay-scoring-section-label">Joints</div>
+            {currentScoring ? currentScoring.result.jointScores.map((js) => {
+              const deduction = currentScoring.result.deductions.find((d) => d.name === js.name)
+              const hasDeduction = !!deduction
+              return (
+                <div key={js.name} className={`replay-scoring-deduction ${hasDeduction ? (deduction.isFocus ? 'focus' : '') : 'good'}`}>
+                  <span className="replay-scoring-joint-name" style={{ opacity: hasDeduction ? 1 : 0.4 }}>
+                    {deduction?.isFocus ? '* ' : ''}{js.name.replace(/_/g, ' ')}
                   </span>
                   <div className="replay-scoring-bar replay-scoring-bar-sm">
                     <div
                       className="replay-scoring-bar-fill"
                       style={{
-                        width: `${d.similarity * 100}%`,
-                        backgroundColor: scoreToJointColor(d.similarity),
+                        width: `${js.similarity * 100}%`,
+                        backgroundColor: hasDeduction ? scoreToJointColor(js.similarity) : 'rgba(0, 255, 136, 0.3)',
                       }}
                     />
                   </div>
-                  <span className="replay-scoring-penalty">-{d.penalty}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="replay-scoring-perfect">No deductions — perfect match!</div>
-          )}
-
-          {/* Joints with no deductions (collapsed) */}
-          {currentScoring.result.jointScores.filter(
-            (js) => !currentScoring.result.deductions.some((d) => d.name === js.name)
-          ).length > 0 && (
-            <div className="replay-scoring-good-joints">
-              {currentScoring.result.jointScores
-                .filter((js) => !currentScoring.result.deductions.some((d) => d.name === js.name))
-                .map((js) => (
-                  <span key={js.name} className="replay-scoring-good-tag">
-                    {js.name.replace(/_/g, ' ')}
+                  <span className="replay-scoring-penalty" style={{ opacity: hasDeduction ? 1 : 0.3 }}>
+                    {hasDeduction ? `-${deduction.penalty}` : '0'}
                   </span>
-                ))}
+                </div>
+              )
+            }) : (
+              <div className="replay-scoring-perfect" style={{ opacity: 0.3 }}>Move near a key pose to see scores</div>
+            )}
+          </div>
+
+          {currentScoring && (
+            <div className="replay-scoring-formula">
+              100 - penalties (focus: -{currentScoring.result.deductions.filter((d) => d.isFocus).reduce((s, d) => s + d.penalty, 0)}, other: -{currentScoring.result.deductions.filter((d) => !d.isFocus).reduce((s, d) => s + d.penalty, 0)})
             </div>
           )}
-
-          <div className="replay-scoring-formula">
-            100 - penalties (focus: -{currentScoring.result.deductions.filter((d) => d.isFocus).reduce((s, d) => s + d.penalty, 0)}, other: -{currentScoring.result.deductions.filter((d) => !d.isFocus).reduce((s, d) => s + d.penalty, 0)})
-          </div>
         </div>
       )}
     </div>

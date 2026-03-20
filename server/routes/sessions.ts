@@ -32,18 +32,23 @@ const upload = multer({
 
 const router = Router()
 
-// Save a new session (multipart: video file + JSON fields)
-router.post('/', upload.single('video'), (req, res) => {
-  const { danceId, score, rank, poses } = req.body as {
+// Save a new session (multipart: video + poses files + JSON fields)
+router.post('/', upload.fields([
+  { name: 'video', maxCount: 1 },
+  { name: 'poses', maxCount: 1 },
+]), (req, res) => {
+  const { danceId, score, rank } = req.body as {
     danceId?: string
     score?: string
     rank?: string
-    poses?: string
   }
+  const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined
+
+  const uploadedFiles = files ? [...(files.video || []), ...(files.poses || [])] : []
 
   if (!danceId || !score || !rank) {
-    // Clean up uploaded file if validation fails
-    if (req.file) fs.unlinkSync(req.file.path)
+    // Clean up uploaded files if validation fails
+    for (const f of uploadedFiles) fs.unlinkSync(f.path)
     res.status(400).json({ error: 'Missing required fields: danceId, score, rank' })
     return
   }
@@ -52,27 +57,28 @@ router.post('/', upload.single('video'), (req, res) => {
   const parsedScore = parseFloat(score)
 
   if (isNaN(parsedDanceId) || isNaN(parsedScore)) {
-    if (req.file) fs.unlinkSync(req.file.path)
+    for (const f of uploadedFiles) fs.unlinkSync(f.path)
     res.status(400).json({ error: 'Invalid danceId or score' })
     return
   }
 
-  // Save poses JSON if provided
+  const sessionDir = path.join(DATA_DIR, 'sessions', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  fs.mkdirSync(sessionDir, { recursive: true })
+
+  // Move poses file to session directory
   let posesPath: string | null = null
-  if (poses) {
-    const sessionDir = path.join(DATA_DIR, 'sessions', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-    fs.mkdirSync(sessionDir, { recursive: true })
+  const posesFile = files?.poses?.[0]
+  if (posesFile) {
     posesPath = path.join(sessionDir, 'poses.json')
-    fs.writeFileSync(posesPath, poses)
+    fs.renameSync(posesFile.path, posesPath)
   }
 
-  // Move video file to session directory if uploaded
+  // Move video file to session directory
   let videoPath: string | null = null
-  if (req.file) {
-    const sessionDir = posesPath ? path.dirname(posesPath) : path.join(DATA_DIR, 'sessions', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-    if (!posesPath) fs.mkdirSync(sessionDir, { recursive: true })
-    videoPath = path.join(sessionDir, `recording${path.extname(req.file.originalname) || '.webm'}`)
-    fs.renameSync(req.file.path, videoPath)
+  const videoFile = files?.video?.[0]
+  if (videoFile) {
+    videoPath = path.join(sessionDir, `recording${path.extname(videoFile.originalname) || '.webm'}`)
+    fs.renameSync(videoFile.path, videoPath)
   }
 
   const session = createSession({

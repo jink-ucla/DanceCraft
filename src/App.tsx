@@ -30,7 +30,7 @@ function formatDuration(seconds: number): string {
 }
 
 function extractYoutubeVideoId(url: string): string | null {
-  const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  const match = url.match(/(?:v=|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)
   return match ? match[1] : null
 }
 

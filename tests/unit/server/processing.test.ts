@@ -18,6 +18,11 @@ describe('isValidYoutubeUrl', () => {
     expect(isValidYoutubeUrl('https://m.youtube.com/watch?v=abc123')).toBe(true)
   })
 
+  it('accepts YouTube Shorts URLs', () => {
+    expect(isValidYoutubeUrl('https://www.youtube.com/shorts/sSM9J5YH_60')).toBe(true)
+    expect(isValidYoutubeUrl('https://youtube.com/shorts/abc123def45')).toBe(true)
+  })
+
   it('rejects non-YouTube URLs', () => {
     expect(isValidYoutubeUrl('https://vimeo.com/123')).toBe(false)
     expect(isValidYoutubeUrl('https://example.com')).toBe(false)

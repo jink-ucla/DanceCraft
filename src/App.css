@@ -2378,9 +2378,10 @@
   text-shadow: 0 0 20px currentColor;
 }
 
-/* Main reference video — fills screen */
+/* Main reference video — fills screen, height-bound via min-height:0 */
 .replay-main-video {
   flex: 1;
+  min-height: 0;
   position: relative;
   cursor: pointer;
   display: flex;
@@ -2624,7 +2625,7 @@
 /* Scoring breakdown panel */
 .replay-scoring-panel {
   position: absolute;
-  top: 50px;
+  bottom: 120px;
   right: 10px;
   width: 260px;
   background: rgba(0, 0, 0, 0.85);
@@ -2778,6 +2779,10 @@
 
 .replay-scoring-deduction.focus {
   font-weight: 600;
+}
+
+.replay-scoring-deduction.good {
+  opacity: 0.5;
 }
 
 .replay-scoring-penalty {

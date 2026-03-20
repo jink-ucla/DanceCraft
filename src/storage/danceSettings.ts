@@ -30,6 +30,6 @@ export function saveDanceSettings(danceId: string, settings: DanceSettings): voi
 
 export function extractYoutubeEmbedId(url: string): string | null {
   if (!url) return null
-  const match = url.match(/(?:v=|youtu\.be\/|\/embed\/)([a-zA-Z0-9_-]{11})/)
+  const match = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)
   return match ? match[1] : null
 }

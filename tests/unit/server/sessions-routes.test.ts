@@ -60,12 +60,13 @@ describe('Sessions API routes', () => {
     const dance = createTestDance()
     const poses = JSON.stringify([{ time: 0.5, pose: { keypoints: [] } }])
 
+    const posesBuffer = Buffer.from(poses)
     const res = await request(app)
       .post('/api/sessions')
       .field('danceId', String(dance.id))
       .field('score', '70')
       .field('rank', 'A')
-      .field('poses', poses)
+      .attach('poses', posesBuffer, 'poses.json')
 
     expect(res.status).toBe(201)
     expect(res.body.posesPath).toBeTruthy()

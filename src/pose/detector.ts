@@ -9,8 +9,8 @@ export async function initDetector(): Promise<PoseLandmarker> {
   if (landmarker) return landmarker
 
   const vision = await FilesetResolver.forVisionTasks(
-    // Use CDN for WASM files (avoids bundling large binaries)
-    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
+    // Pin WASM version to match installed npm package (avoids _malloc errors from version mismatch)
+    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm'
   )
 
   landmarker = await PoseLandmarker.createFromOptions(vision, {

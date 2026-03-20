@@ -575,6 +575,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
                 playsInline
                 muted
                 preload="auto"
+                style={settings.mirror ? { transform: 'scaleX(-1)' } : undefined}
               />
             ) : (
               <div className="dance-reference-placeholder">
