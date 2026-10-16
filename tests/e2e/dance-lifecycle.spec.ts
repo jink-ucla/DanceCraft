@@ -203,7 +203,7 @@ test.describe('Dance mode lifecycle', () => {
 
     // Click back (force click since overlays may be blocking)
     await page.locator('.back-button').click({ force: true })
-    await expect(page.locator('h1')).toHaveText('Groovy')
+    await expect(page.locator('h1')).toHaveText('DanceCraft')
 
     await takeScreenshot(page, 'dance-back-to-home')
   })

@@ -1,0 +1,38 @@
+/* ==========================================================================
+   DanceCraft practice — room for the per-video "Mirror ON/OFF" toggle.
+   The toggles column (Ghost / Score / Mirror / AI Drill) sits above the
+   webcam picture-in-picture instead of on top of it.
+   ========================================================================== */
+
+.practice-mode .practice-toggles-row {
+  bottom: 190px;
+  align-items: flex-end;
+}
+
+.practice-mode .practice-toggle-btn.practice-mirror-btn.active {
+  color: var(--blue);
+  border-color: rgba(0, 204, 255, 0.55);
+  background: rgba(0, 204, 255, 0.1);
+}
+
+/* Loop / speed row (A, B, Clear Loop, 0.5x 0.75x 1x) and the timeline stop
+   left of the webcam picture-in-picture (200px wide, 20px from the edge;
+   140px / 12px on phones) so neither is drawn on top of it. */
+.practice-mode .practice-loop-controls {
+  right: 236px;
+  flex-wrap: wrap;
+}
+
+.practice-mode .practice-scrubber-container {
+  right: 220px;
+}
+
+@media (max-width: 768px) {
+  .practice-mode .practice-loop-controls {
+    right: 168px;
+  }
+
+  .practice-mode .practice-scrubber-container {
+    right: 152px;
+  }
+}

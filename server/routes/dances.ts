@@ -2,14 +2,16 @@ import { Router } from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
 import { createJob, getJob } from '../jobs.ts'
-import { isValidYoutubeUrl, processJob, ensureDataDir } from '../processing.ts'
+import multer from 'multer'
+import { isValidYoutubeUrl, processJob, processUploadJob, parseClipRange, ensureDataDir, DATA_DIR } from '../processing.ts'
+import type { ClipRange } from '../processing.ts'
 import { getAllDances, getDance, deleteDance } from '../db.ts'
 
 const router = Router()
 
 // Process a new dance from YouTube URL
 router.post('/process', (req, res) => {
-  const { youtubeUrl } = req.body as { youtubeUrl?: string }
+  const { youtubeUrl, startTime, endTime } = req.body as { youtubeUrl?: string; startTime?: unknown; endTime?: unknown }
 
   if (!youtubeUrl || typeof youtubeUrl !== 'string') {
     res.status(400).json({ error: 'Missing required field: youtubeUrl' })
@@ -21,11 +23,69 @@ router.post('/process', (req, res) => {
     return
   }
 
+  let clip: ClipRange | null
+  try {
+    clip = parseClipRange(startTime, endTime)
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message })
+    return
+  }
+
   ensureDataDir()
   const job = createJob(youtubeUrl)
 
   // Start processing in background (non-blocking)
-  processJob(job).catch(() => {
+  processJob(job, clip).catch(() => {
+    // Error is already captured in the job via updateJob
+  })
+
+  res.status(202).json({
+    jobId: job.id,
+    status: job.status,
+    message: 'Processing started. Use GET /api/dances/jobs/:id to track progress.',
+  })
+})
+
+// Upload a video file from the browser (optionally trimmed to startTime/endTime)
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      const dir = path.join(DATA_DIR, 'uploads')
+      fs.mkdirSync(dir, { recursive: true })
+      cb(null, dir)
+    },
+    filename: (_req, file, cb) => {
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname) || '.mp4'}`)
+    },
+  }),
+  limits: { fileSize: 4 * 1024 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, file.mimetype.startsWith('video/') || /.(mp4|mov|m4v|webm|mkv|avi)$/i.test(file.originalname))
+  },
+})
+
+router.post('/upload', upload.single('video'), (req, res) => {
+  const file = req.file
+  if (!file) {
+    res.status(400).json({ error: 'Missing video file (field "video"). Supported: mp4, mov, m4v, webm, mkv, avi.' })
+    return
+  }
+  const body = req.body as { title?: string; startTime?: unknown; endTime?: unknown }
+  let clip: ClipRange | null
+  try {
+    clip = parseClipRange(body.startTime, body.endTime)
+  } catch (err) {
+    fs.rmSync(file.path, { force: true })
+    res.status(400).json({ error: (err as Error).message })
+    return
+  }
+  const title = (body.title ?? '').toString().trim().slice(0, 120)
+    || path.basename(file.originalname, path.extname(file.originalname)).slice(0, 120)
+    || 'Uploaded dance'
+
+  ensureDataDir()
+  const job = createJob(`upload:${file.originalname}`)
+  processUploadJob(job, file.path, title, clip).catch(() => {
     // Error is already captured in the job via updateJob
   })
 
@@ -52,6 +112,7 @@ router.get('/jobs/:id', (req, res) => {
     progress: job.progress,
     metadata: job.metadata,
     error: job.error || null,
+    danceId: job.danceId ?? null,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
   })

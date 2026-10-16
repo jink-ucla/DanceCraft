@@ -1,5 +1,34 @@
 # Work Log
 
+## 2026-10-15 - Final scoring integration verification and local demo restore
+
+- Verified the integrated key-moment scorer after its held-out win: all 524 unit tests and the TypeScript/production build pass. Changed-file lint has zero errors and three existing DanceMode hook warnings; repository-wide lint is not clean.
+- Built outside the repository with the correct backend URL (`VITE_API_BASE=http://localhost:3002`) into `C:/Users/jink/Documents/DanceCraft-Submission/.build/final-app-dist`.
+- Tested the production UI on a separate preview port and offline backend first, using actual dance/history data read-only. Desktop and mobile had no horizontal overflow or JavaScript page errors. The latest history user video and reference video decoded and played; replay mirror toggled and persisted.
+- Checked the current built-in coach with low-motion, partial-framing evidence: it prioritized movement/framing and did not blame untracked legs for technique.
+- Restored the already-stopped local services as hidden background processes: frontend 5174 and backend 3002. Unrelated 5173/3001 services were left alone. Screenshots, service logs and browser results are in the submission evidence folder.
+- Anthropic inference is configured but blocked by the verified insufficient-credit response. No credential changes, funding actions or repeated paid API calls were made.
+
+## 2026-10-15 - DanceCraft: hero, clip + why-this-score, evidence-aware coach (integration)
+
+- Home hero (`src/components/Hero.tsx` + `Hero.css`): "Dance it. / Get coached by Claude. / Beat the host." with Start the challenge / Practice / + Add Dance, Coach Buddy + host dancing the first ready dance, score to beat + top 3, 3-step strip; dance-card titles clamp to 3 lines
+- Results: "Your clip" card (inline recording, side-by-side replay, All clips), "Why this score?" (tracked %, motion match, latency, mirror-style, scorer notes), out-of-frame body parts greyed; one object URL per recording (`src/components/objectUrl.ts`); Mirror ON/OFF in Practice and Replay (per video)
+- Coach evidence: client sends coverage / motionMatch / latencyMs / mirrored / untrackedBodyParts / notes (`src/components/scoreEvidence.ts`); server schema + prompt put framing/movement first and never coach an untracked part; built-in coach does the same
+- Integration fixes: client evidence caps aligned with the server's request bounds (latency <= 2000 ms, <= 4 untracked parts of 20 chars) so a sanitized attempt can never get a 400; battle request now carries the challenger's evidence and the built-in battle announcer no longer blames/praises an out-of-frame part (was "sharpen those Legs (14%)" with legs out of frame) and puts framing/movement first; Practice speed buttons and timeline no longer run under the webcam inset
+- Tests: 524 unit tests passing; `dancecraft-coach.spec.ts` now also asserts the hero CTAs, the clip card, the why-this-score block and the evidence in the coach request body (2/2 passing)
+
+## 2026-10-15 - DanceCraft: AI coach, drill, character, arena
+
+- Added shared coach contract (`src/coach/types.ts`) and pure plan/battle helpers (`src/coach/plan.ts`)
+- Added Claude coach API: `GET /api/coach/status`, `POST /api/coach`, `POST /api/coach/battle` (`server/routes/coach.ts`, `server/coach/*`), structured outputs + zod validation, deterministic fallback on every failure
+- Results screen: AI Coach panel, "Beat <host>?" battle panel + mini leaderboard, delta vs last try, weakest-section highlight; browser client `src/api/coach.ts` with offline fallback
+- PracticeMode: coach drill (section loop at plan speed for N reps, HUD, complete overlay, "Try Full Dance"); fixed stale A/B loop bounds in the rAF loop (`src/coach/drill.ts`)
+- Characters: buddy/host/challenger styles for `TargetPoseFigure`, new `DancingCharacter` + `src/pose/interpolate.ts`
+- Arena: player setup + host toggle, attempt log, previous attempt, host score to beat, leaderboard (`src/storage/arena.ts`); DanceCraft home screen
+- Local host dances: `npm run add-dance`, `public/dances/manifest.json`, `src/storage/bundledDances.ts`, `scripts/setup-windows.ps1`, `docs/dancecraft.md` runbook; `PYTHON_PATH` now resolved at run time
+- Integration fixes: DanceMode hooks-order crash on pose-load errors; Back buttons on DanceMode/PracticeMode error screens; coach/battle responses cached across remounts (Replay/Practice -> back); Back from a coach drill returns to results; host re-runs detected by name (`isHostAttemptFor`); `.env.example` CORS no longer pinned to :5173; imported videos git-ignored; e2e headings updated
+- Tests: 413 unit tests passing (baseline 195); new `tests/e2e/dancecraft-coach.spec.ts` (2 passing) with screenshots `tests/e2e/screenshots/dancecraft-{results,practice,home}.png`
+
 ## 2026-03-15 - Scoring System Overhaul (Three-Layer Defense)
 
 - Added presence gate (`src/scoring/presence.ts`) — requires 6/8 core keypoints at ≥0.5 confidence

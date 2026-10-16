@@ -17,6 +17,8 @@ export interface Job {
     thumbnail?: string
   }
   error?: string
+  /** Set when the job completes: id of the created dance row. */
+  danceId?: number
   createdAt: string
   updatedAt: string
 }

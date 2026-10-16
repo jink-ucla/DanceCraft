@@ -30,6 +30,7 @@ interface DanceModeProps {
   onFinish?: (score: number, totalHits: number, totalPoses: number) => void
   onRecordPose?: (pose: Pose, time: number) => void
   onReferencePosesLoaded?: (poses: TimestampedPose[]) => void
+  onReferenceGeometryLoaded?: (geometry: { width: number; height: number }) => void
   onRecordingComplete?: (blob: Blob) => void
   onBack?: () => void
 }
@@ -39,7 +40,7 @@ interface FeedbackDisplay {
   timestamp: number
 }
 
-export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, customKeyPoses, difficulty = 'normal', onFinish, onRecordPose, onReferencePosesLoaded, onRecordingComplete, onBack }: DanceModeProps) {
+export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, customKeyPoses, difficulty = 'normal', onFinish, onRecordPose, onReferencePosesLoaded, onReferenceGeometryLoaded, onRecordingComplete, onBack }: DanceModeProps) {
   const diffConfig: DifficultyConfig = DIFFICULTY_CONFIGS[difficulty]
   const webcamRef = useRef<HTMLVideoElement>(null)
   const refVideoRef = useRef<HTMLVideoElement>(null)
@@ -184,34 +185,40 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
     // Layer 1: Presence gate — skip scoring if user not sufficiently visible
     const presence = checkPresence(userPose)
 
-    if (userPose && presence.present) {
-      drawPose(ctx, userPose, canvas.width, canvas.height)
-
-      // Draw raw webcam frame to composite canvas for recording.
-      // This happens in the SAME rAF as pose estimation, so the recorded
-      // video frame and pose timestamp are perfectly synchronized.
-      const compositeCanvas = compositeCanvasRef.current
-      if (compositeCanvas) {
-        const cCtx = compositeCanvas.getContext('2d')
-        if (cCtx) {
-          cCtx.drawImage(video, 0, 0, compositeCanvas.width, compositeCanvas.height)
-
-          // Draw sync marker for the first 5 frames: a bright green square
-          // in the top-left corner. Replay scans for this to compute the
-          // exact video↔pose time offset.
-          if (syncFrameCountRef.current < 5) {
-            cCtx.fillStyle = '#00FF00'
-            cCtx.fillRect(4, 4, 32, 32)
-            syncFrameCountRef.current++
-          }
-        }
-      }
-
-      // Record pose with timestamp anchored to recording start (performance.now based).
-      // Uses the SAME clock and zero-point as captureStream's frame timestamps,
-      // so pose time T exactly corresponds to video time T during replay.
+    // Record every detected pose (not just 'present' ones) so the post-dance
+    // scorer sees the whole timeline: missing joints and untracked time are
+    // penalised there instead of silently dropped (which inflated scores).
+    if (userPose) {
+      // Timestamp anchored to recording start (performance.now based) — the SAME
+      // clock and zero-point as captureStream's frame timestamps, so pose time T
+      // corresponds to video time T during replay.
       const poseTime = (performance.now() - recordingStartRef.current) / 1000
       onRecordPose?.(userPose, poseTime)
+    }
+
+    // Draw the raw webcam frame to the composite canvas for recording on EVERY
+    // frame — previously only while 'present', so upper-body framing produced
+    // a blank replay clip. Same rAF as pose estimation, so the recorded video
+    // frame and pose timestamp stay synchronized.
+    const compositeCanvas = compositeCanvasRef.current
+    if (compositeCanvas) {
+      const cCtx = compositeCanvas.getContext('2d')
+      if (cCtx) {
+        cCtx.drawImage(video, 0, 0, compositeCanvas.width, compositeCanvas.height)
+
+        // Draw sync marker for the first 5 frames: a bright green square
+        // in the top-left corner. Replay scans for this to compute the
+        // exact video↔pose time offset.
+        if (syncFrameCountRef.current < 5) {
+          cCtx.fillStyle = '#00FF00'
+          cCtx.fillRect(4, 4, 32, 32)
+          syncFrameCountRef.current++
+        }
+      }
+    }
+
+    if (userPose && presence.present) {
+      drawPose(ctx, userPose, canvas.width, canvas.height)
 
       // Layer 2: Feed movement tracker
       movementTrackerRef.current.addFrame(userPose, elapsed)
@@ -322,6 +329,7 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
     async function init() {
       try {
         // Load reference pose data
+        if (!referencePoseUrl) throw new Error('This dance has no reference pose data')
         const response = await fetch(referencePoseUrl)
         if (!response.ok) throw new Error('Failed to load reference poses')
         const timeline: PoseTimeline = await response.json()
@@ -496,19 +504,30 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
     })
   }, [phase, score, totalHits, onFinish, stopRecording])
 
-  if (error) {
-    return <div className="dance-error">{error}</div>
-  }
-
-  const hitRate = totalKeyPosesRef.current > 0 ? totalHits / totalKeyPosesRef.current : 0
-  const isHighScore = hitRate >= 0.6
-
-  // Clear combo break indicator after animation
+  // Clear combo break indicator after animation.
+  // Must stay above the early error return: hooks may never be skipped
+  // (a failed pose load used to crash with "Rendered fewer hooks than expected").
   useEffect(() => {
     if (!comboBroke) return
     const timer = setTimeout(() => setComboBroke(false), 600)
     return () => clearTimeout(timer)
   }, [comboBroke])
+
+  if (error) {
+    return (
+      <div className="dance-mode">
+        <div className="dance-error" style={{ minHeight: '100%' }}>{error}</div>
+        {onBack && (
+          <button className="dance-back-btn" onClick={onBack}>
+            Back
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const hitRate = totalKeyPosesRef.current > 0 ? totalHits / totalKeyPosesRef.current : 0
+  const isHighScore = hitRate >= 0.6
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60)
@@ -528,6 +547,10 @@ export function DanceMode({ referencePoseUrl, referenceVideoUrl, mirrorVideo, cu
             playsInline
             muted
             preload="auto"
+            onLoadedMetadata={(event) => {
+              const video = event.currentTarget
+              onReferenceGeometryLoaded?.({ width: video.videoWidth, height: video.videoHeight })
+            }}
             style={mirrorVideo ? { transform: 'scaleX(-1)' } : undefined}
           />
         ) : (

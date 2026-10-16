@@ -9,8 +9,29 @@ import { comparePoses } from '../scoring/comparison'
 import type { KeyPose, PoseTimeline } from '../scoring/keyPoseDetection'
 import type { Pose, Keypoint } from '../scoring/types'
 import { TargetPoseFigure } from './TargetPoseFigure'
-import { loadDanceSettings, saveDanceSettings, extractYoutubeEmbedId } from '../storage/danceSettings'
+import { loadDanceSettings, saveDanceSettings, setDanceMirror, extractYoutubeEmbedId } from '../storage/danceSettings'
 import { getWebcamStream } from './Settings'
+import { COACH_SPEEDS, MIN_DRILL_SECONDS } from '../coach/types'
+import type { CoachPlan } from '../coach/types'
+import {
+  advanceDrill,
+  clampRepeats,
+  createDrillState,
+  currentRepNumber,
+  effectiveLoopEnd,
+  formatClock,
+  formatDrillRange,
+  formatSpeed,
+  isValidDrillLoop,
+  repProgress,
+  resetDrill,
+  resolveDrillRange,
+  restartRep,
+  shouldWrapLoop,
+} from '../coach/drill'
+import type { DrillState } from '../coach/drill'
+import './PracticeDrill.css'
+import './Mirror.css'
 
 type PracticePhase = 'loading' | 'ready' | 'playing' | 'paused' | 'resuming'
 type PracticeTab = 'practice' | 'tutorial'
@@ -20,7 +41,22 @@ interface PracticeModeProps {
   referenceVideoUrl?: string
   danceId: string
   onBack: () => void
+  /** AI coach plan: when set, practice opens as a guided drill of the plan's section. */
+  coachPlan?: CoachPlan | null
+  /** Called once when the coach drill finishes all its repeats. */
+  onCoachDrillComplete?: () => void
+  /** "Try the full dance again" — App routes to DanceMode for this dance. */
+  onRetryDance?: () => void
 }
+
+/** A running coach drill: the plan it came from plus its rep counter. */
+interface DrillSession {
+  plan: CoachPlan
+  state: DrillState
+}
+
+/** One tick of the playing-state loop. Resolves false to stop the loop. */
+type PracticeFrame = (isCurrent: () => boolean) => Promise<boolean>
 
 function scoreToGrade(score: number): { label: string; color: string } {
   if (score >= 0.85) return { label: 'Perfect', color: '#00ff88' }
@@ -29,7 +65,21 @@ function scoreToGrade(score: number): { label: string; color: string } {
   return { label: 'Miss', color: '#ff6666' }
 }
 
-export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onBack }: PracticeModeProps) {
+/** Browsers can reset playbackRate (load, play), so set both rates. */
+function applyPlaybackRate(video: HTMLVideoElement, speed: number) {
+  if (video.defaultPlaybackRate !== speed) video.defaultPlaybackRate = speed
+  if (video.playbackRate !== speed) video.playbackRate = speed
+}
+
+export function PracticeMode({
+  referencePoseUrl,
+  referenceVideoUrl,
+  danceId,
+  onBack,
+  coachPlan,
+  onCoachDrillComplete,
+  onRetryDance,
+}: PracticeModeProps) {
   const webcamRef = useRef<HTMLVideoElement>(null)
   const refVideoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -47,6 +97,24 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
   const [loopCount, setLoopCount] = useState(0)
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [showGhostOverlay, setShowGhostOverlay] = useState(true)
+
+  // The rAF loop reads these refs (never stale closures), so A/B and drill
+  // changes made during playback apply on the next frame.
+  const loopStartRef = useRef<number | null>(null)
+  const loopEndRef = useRef<number | null>(null)
+  const playbackSpeedRef = useRef(1)
+  /** Bumped to invalidate the running rAF loop; only one loop may run. */
+  const loopTokenRef = useRef(0)
+  /** Reference-video time seen by the previous loop tick. */
+  const lastTimeRef = useRef(0)
+  /** Set by manual seeks so the drill does not count them as reps. */
+  const seekedRef = useRef(false)
+
+  // AI coach drill
+  const drillRef = useRef<DrillSession | null>(null)
+  const [drill, setDrill] = useState<DrillSession | null>(null)
+  const onDrillCompleteRef = useRef(onCoachDrillComplete)
+  useEffect(() => { onDrillCompleteRef.current = onCoachDrillComplete }, [onCoachDrillComplete])
 
   // Pose scoring overlay (toggle on free practice)
   const [showPoseScore, setShowPoseScore] = useState(false)
@@ -175,25 +243,113 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
     return nearest
   }, [keyPoses])
 
-  // Detection loop — handles both playing and scoring
-  const practiceLoop = useCallback(async () => {
-    const video = webcamRef.current
-    const canvas = canvasRef.current
-    if (!video || !canvas || video.readyState < 2) {
-      animFrameRef.current = requestAnimationFrame(practiceLoop)
-      return
+  const commitDrill = useCallback((next: DrillSession | null) => {
+    drillRef.current = next
+    setDrill(next)
+  }, [])
+
+  // A/B loop bounds: state for rendering, refs for the rAF loop
+  const setLoopBounds = useCallback((start: number | null, end: number | null) => {
+    loopStartRef.current = start
+    loopEndRef.current = end
+    setLoopStart(start)
+    setLoopEnd(end)
+  }, [])
+
+  const changeSpeed = useCallback((speed: number) => {
+    playbackSpeedRef.current = speed
+    setPlaybackSpeed(speed)
+    const refVideo = refVideoRef.current
+    if (refVideo) applyPlaybackRate(refVideo, speed)
+  }, [])
+
+  // play() and re-apply the speed once it resolves (browsers may reset it)
+  const playReference = useCallback((video: HTMLVideoElement) => {
+    applyPlaybackRate(video, playbackSpeedRef.current)
+    video.play()
+      .then(() => applyPlaybackRate(video, playbackSpeedRef.current))
+      .catch(() => {})
+  }, [])
+
+  const stopPracticeLoop = useCallback(() => {
+    loopTokenRef.current += 1
+    cancelAnimationFrame(animFrameRef.current)
+  }, [])
+
+  // One tick of the playing-state loop: loop/drill bookkeeping, then pose overlay
+  const practiceFrame = useCallback<PracticeFrame>(async (isCurrent) => {
+    const refVideo = refVideoRef.current
+    if (refVideo) {
+      const time = refVideo.currentTime
+      if (refVideo.duration) {
+        setCurrentTime(time)
+        setDuration(refVideo.duration)
+      }
+
+      const seeked = seekedRef.current
+      seekedRef.current = false
+      const prevTime = lastTimeRef.current
+      lastTimeRef.current = time
+
+      // Check loop boundaries (bounds read from refs, never stale)
+      let wrapped = false
+      const start = loopStartRef.current
+      const rawEnd = loopEndRef.current
+      if (start !== null && rawEnd !== null) {
+        const end = effectiveLoopEnd(rawEnd, refVideo.duration)
+        const session = drillRef.current
+        if (session && !session.state.completed) {
+          const step = advanceDrill(session.state, { prevTime, currentTime: time, loopStart: start, loopEnd: end, seeked })
+          if (step.state !== session.state) {
+            const next: DrillSession = { plan: session.plan, state: step.state }
+            drillRef.current = next
+            if (step.counted) setDrill(next)
+          }
+          if (step.completed) {
+            stopPracticeLoop()
+            refVideo.pause()
+            refVideo.currentTime = start
+            lastTimeRef.current = start
+            setCurrentTime(start)
+            setPhase('paused')
+            onDrillCompleteRef.current?.()
+            return false
+          }
+          wrapped = step.wrapped
+        } else {
+          wrapped = shouldWrapLoop(time, start, end)
+          if (wrapped) setLoopCount((c) => c + 1)
+        }
+
+        if (wrapped) {
+          refVideo.currentTime = start
+          lastTimeRef.current = start
+          // A loop ending at the very end of the video: playback stopped there
+          if (refVideo.paused) playReference(refVideo)
+        }
+      }
+
+      // Check if video ended
+      if (!wrapped && refVideo.ended) {
+        setPhase('paused')
+        return false
+      }
     }
 
+    const video = webcamRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas || video.readyState < 2) return true
+
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) return true
+
+    const userPose = await estimatePose(video)
+    if (!isCurrent()) return false
 
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    const userPose = await estimatePose(video)
-
     // Get current video time for scoring
-    const refVideo = refVideoRef.current
-    const videoTime = refVideo?.currentTime ?? 0
+    const videoTime = refVideoRef.current?.currentTime ?? 0
 
     if (userPose) {
       // If pose scoring is on, color skeleton by score
@@ -216,38 +372,44 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
     }
 
     // Draw ghost reference pose
-    if (refVideo) {
-      drawGhostPose(ctx, refVideo.currentTime, canvas.width, canvas.height, false)
+    if (refVideoRef.current) {
+      drawGhostPose(ctx, videoTime, canvas.width, canvas.height, false)
     }
 
-    if (refVideo && refVideo.duration) {
-      setCurrentTime(refVideo.currentTime)
-      setDuration(refVideo.duration)
-    }
+    return true
+  }, [drawPose, drawGhostPose, getRefPoseAtTime, findNearestKeyPose, playReference, stopPracticeLoop])
 
-    // Check loop boundaries
-    if (refVideo && loopStart !== null && loopEnd !== null) {
-      if (refVideo.currentTime >= loopEnd) {
-        refVideo.currentTime = loopStart
-        setLoopCount((c) => c + 1)
+  // The loop always calls the latest frame (fresh ghost / key-pose settings)
+  const practiceFrameRef = useRef<PracticeFrame>(practiceFrame)
+  useEffect(() => { practiceFrameRef.current = practiceFrame }, [practiceFrame])
+
+  // Start the playing-state detection loop, replacing any loop already running
+  const startPracticeLoop = useCallback(() => {
+    stopPracticeLoop()
+    const token = loopTokenRef.current
+    const isCurrent = () => token === loopTokenRef.current
+    const tick = async () => {
+      if (!isCurrent()) return
+      let keepGoing = true
+      try {
+        keepGoing = await practiceFrameRef.current(isCurrent)
+      } catch {
+        // a failed pose estimate should not kill playback bookkeeping
+      }
+      if (keepGoing && isCurrent()) {
+        animFrameRef.current = requestAnimationFrame(tick)
       }
     }
+    animFrameRef.current = requestAnimationFrame(tick)
+  }, [stopPracticeLoop])
 
-    // Check if video ended
-    if (refVideo && refVideo.ended) {
-      setPhase('paused')
-      return
-    }
-
-    animFrameRef.current = requestAnimationFrame(practiceLoop)
-  }, [drawPose, drawGhostPose, loopStart, loopEnd, getRefPoseAtTime, findNearestKeyPose])
-
-  // Load reference poses and initialize
+  // Load reference poses and initialize (cleanup also cancels the rAF loop)
   useEffect(() => {
     let cancelled = false
 
     async function init() {
       try {
+        if (!referencePoseUrl) throw new Error('This dance has no reference pose data')
         const response = await fetch(referencePoseUrl)
         if (!response.ok) throw new Error('Failed to load reference poses')
         const timeline: PoseTimeline = await response.json()
@@ -304,42 +466,85 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
 
     return () => {
       cancelled = true
-      cancelAnimationFrame(animFrameRef.current)
+      stopPracticeLoop()
       disposeDetector()
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop())
       }
     }
-  }, [referencePoseUrl, danceId])
+  }, [referencePoseUrl, danceId, stopPracticeLoop])
+
+  /**
+   * Start (or restart) a coach drill: loop the plan's section at the plan's
+   * speed from its start. keepLoop = "Drill Again": keep the current A/B loop
+   * and speed (the user may have tweaked them) and just reset the reps.
+   */
+  const launchDrill = useCallback((plan: CoachPlan, keepLoop: boolean) => {
+    const refVideo = refVideoRef.current
+    let start = loopStartRef.current
+    let end = loopEndRef.current
+    if (!keepLoop || start === null || end === null || !isValidDrillLoop(start, end)) {
+      const range = resolveDrillRange(plan, refVideo?.duration)
+      start = range.start
+      end = range.end
+      setLoopBounds(start, end)
+    }
+
+    const previous = drillRef.current
+    commitDrill({
+      plan,
+      state: keepLoop && previous ? resetDrill(previous.state) : createDrillState(plan),
+    })
+    if (!keepLoop) changeSpeed(plan.playbackSpeed)
+    setLoopCount(0)
+    seekedRef.current = false
+    lastTimeRef.current = start
+
+    if (refVideo) {
+      refVideo.currentTime = start
+      refVideo.muted = false
+      refVideo.volume = 0.7
+      playReference(refVideo)
+    }
+    setCurrentTime(start)
+    setPhase('playing')
+    startPracticeLoop()
+  }, [setLoopBounds, commitDrill, changeSpeed, playReference, startPracticeLoop])
 
   // Start practice
   const startPractice = useCallback(() => {
+    if (coachPlan) {
+      launchDrill(coachPlan, false)
+      return
+    }
     const refVideo = refVideoRef.current
+    seekedRef.current = false
+    lastTimeRef.current = 0
     if (refVideo) {
       refVideo.currentTime = 0
       refVideo.muted = false
       refVideo.volume = 0.7
-      refVideo.play().catch(() => {})
+      playReference(refVideo)
     }
     setPhase('playing')
-    animFrameRef.current = requestAnimationFrame(practiceLoop)
-  }, [practiceLoop])
+    startPracticeLoop()
+  }, [coachPlan, launchDrill, playReference, startPracticeLoop])
 
   // Pause
   const pause = useCallback(() => {
-    cancelAnimationFrame(animFrameRef.current)
+    stopPracticeLoop()
     const refVideo = refVideoRef.current
     if (refVideo) refVideo.pause()
     setPhase('paused')
-  }, [])
+  }, [stopPracticeLoop])
 
   // Resume instantly (no countdown)
   const resumeInstant = useCallback(() => {
     const refVideo = refVideoRef.current
-    if (refVideo) refVideo.play().catch(() => {})
+    if (refVideo) playReference(refVideo)
     setPhase('playing')
-    animFrameRef.current = requestAnimationFrame(practiceLoop)
-  }, [practiceLoop])
+    startPracticeLoop()
+  }, [playReference, startPracticeLoop])
 
   // Resume with countdown
   const startResume = useCallback(() => {
@@ -353,15 +558,15 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
 
     if (resumeCountdown <= 0) {
       const refVideo = refVideoRef.current
-      if (refVideo) refVideo.play().catch(() => {})
+      if (refVideo) playReference(refVideo)
       setPhase('playing')
-      animFrameRef.current = requestAnimationFrame(practiceLoop)
+      startPracticeLoop()
       return
     }
 
     const timer = setTimeout(() => setResumeCountdown((c) => c - 1), 1000)
     return () => clearTimeout(timer)
-  }, [phase, resumeCountdown, practiceLoop])
+  }, [phase, resumeCountdown, playReference, startPracticeLoop])
 
   // Seek
   const seekTo = useCallback((time: number) => {
@@ -369,6 +574,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
     if (!refVideo) return
     const clamped = Math.max(0, Math.min(time, refVideo.duration || 0))
     refVideo.currentTime = clamped
+    seekedRef.current = true
     setCurrentTime(clamped)
   }, [])
 
@@ -390,14 +596,68 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
     }
   }, [phase, pause, resumeInstant])
 
+  // A/B loop editing. Loops shorter than MIN_DRILL_SECONDS are refused; an A
+  // that would make one drops B (and leaves drill mode, the loop is gone).
+  const markLoopStart = useCallback((time: number) => {
+    const end = loopEndRef.current
+    if (end !== null && end - time < MIN_DRILL_SECONDS) {
+      setLoopBounds(time, null)
+      commitDrill(null)
+    } else {
+      setLoopBounds(time, end)
+      const session = drillRef.current
+      if (session) {
+        // the playhead now sits on the loop start: next pass is a full rep
+        drillRef.current = { plan: session.plan, state: restartRep(session.state) }
+        seekedRef.current = false
+        lastTimeRef.current = time
+      }
+    }
+    setLoopCount(0)
+  }, [setLoopBounds, commitDrill])
+
+  const markLoopEnd = useCallback((time: number) => {
+    const start = loopStartRef.current
+    if (start !== null && time - start >= MIN_DRILL_SECONDS) {
+      setLoopBounds(start, time)
+      setLoopCount(0)
+    }
+  }, [setLoopBounds])
+
+  // Clearing the loop manually exits drill mode
+  const clearLoop = useCallback(() => {
+    setLoopBounds(null, null)
+    setLoopCount(0)
+    commitDrill(null)
+  }, [setLoopBounds, commitDrill])
+
+  // Drill complete overlay actions
+  const drillAgain = useCallback(() => {
+    const session = drillRef.current
+    if (session) launchDrill(session.plan, true)
+  }, [launchDrill])
+
+  // Leave drill mode but stay paused in normal practice (loop + speed kept)
+  const freePractice = useCallback(() => {
+    commitDrill(null)
+  }, [commitDrill])
+
+  const drillComplete = drill !== null && drill.state.completed
+  const drillRunning = drill !== null && !drill.state.completed
+
   // Keyboard shortcuts
   useEffect(() => {
     if (activeTab === 'tutorial') return
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // The drill-complete overlay owns the screen; let its buttons handle keys
+      if (drillComplete) return
+
       if (e.code === 'Space') {
         e.preventDefault()
-        if (phase === 'playing') {
+        if (phase === 'ready') {
+          if (coachPlan) startPractice()
+        } else if (phase === 'playing') {
           pause()
         } else if (phase === 'paused') {
           if (e.shiftKey) startResume()
@@ -410,19 +670,15 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
         e.preventDefault()
         seekTo(currentTime - (e.shiftKey ? 1 : 5))
       } else if (e.code === 'KeyA') {
-        setLoopStart(currentTime)
-        setLoopCount(0)
+        markLoopStart(currentTime)
       } else if (e.code === 'KeyB') {
-        if (loopStart !== null && currentTime - loopStart >= 3) {
-          setLoopEnd(currentTime)
-          setLoopCount(0)
-        }
+        markLoopEnd(currentTime)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [phase, pause, startResume, resumeInstant, currentTime, seekTo, loopStart, activeTab])
+  }, [phase, pause, startResume, resumeInstant, currentTime, seekTo, activeTab, drillComplete, coachPlan, startPractice, markLoopStart, markLoopEnd])
 
   // Keep detection loop running during pause (for live scoring)
   useEffect(() => {
@@ -476,6 +732,32 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
     return () => { running = false }
   }, [phase, drawPose, drawGhostPose, activeTab, getRefPoseAtTime, findNearestKeyPose])
 
+  // Re-apply the playback speed when the reference video (re)loads or starts
+  // playing — browsers can reset playbackRate — and keep a drill in its section.
+  useEffect(() => {
+    if (activeTab !== 'practice' || !referenceVideoUrl) return
+    const video = refVideoRef.current
+    if (!video) return
+
+    const reapplySpeed = () => applyPlaybackRate(video, playbackSpeedRef.current)
+    const handleLoadedMetadata = () => {
+      reapplySpeed()
+      const start = loopStartRef.current
+      const end = loopEndRef.current
+      if (drillRef.current && start !== null && end !== null && (video.currentTime < start || video.currentTime > end)) {
+        video.currentTime = start
+        lastTimeRef.current = start
+      }
+    }
+
+    video.addEventListener('loadedmetadata', handleLoadedMetadata)
+    video.addEventListener('play', reapplySpeed)
+    return () => {
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      video.removeEventListener('play', reapplySpeed)
+    }
+  }, [activeTab, referenceVideoUrl])
+
   // Save tutorial URL
   const saveTutorialUrl = useCallback(() => {
     const newSettings = { ...settings, tutorialUrl: tutorialInput }
@@ -490,20 +772,37 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
     setTutorialInput('')
   }, [danceId, settings])
 
+  // Per-video mirror (same setting as the dance card / Add Dance): flips the reference live
+  const toggleMirror = useCallback(() => {
+    const mirror = !settings.mirror
+    setDanceMirror(danceId, mirror)
+    setSettings((s) => ({ ...s, mirror }))
+  }, [danceId, settings.mirror])
+
   if (error) {
-    return <div className="dance-error">{error}</div>
+    return (
+      <div className="practice-mode">
+        <div className="dance-error" style={{ minHeight: '100%' }}>{error}</div>
+        <button className="practice-back-btn" onClick={onBack}>
+          Back
+        </button>
+      </div>
+    )
   }
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60)
-    const s = Math.floor(seconds % 60)
-    return `${m}:${s.toString().padStart(2, '0')}`
-  }
+  const formatTime = formatClock
 
   const grade = liveScore !== null ? scoreToGrade(liveScore) : null
+  const inSession = phase === 'playing' || phase === 'paused' || phase === 'resuming'
+
+  const readyRange = coachPlan ? resolveDrillRange(coachPlan, duration) : null
+  const drillProgress = loopStart !== null && loopEnd !== null
+    ? repProgress(currentTime, loopStart, effectiveLoopEnd(loopEnd, duration))
+    : 0
+  const drillProgressPct = Math.round(drillProgress * 100)
 
   return (
-    <div className="practice-mode">
+    <div className={`practice-mode${drillRunning ? ' drill-active' : ''}`}>
       {/* Tab bar */}
       <div className="practice-tabs">
         <button
@@ -600,6 +899,41 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
             />
           </div>
 
+          {/* AI coach drill HUD */}
+          {drillRunning && drill && inSession && (
+            <div className="drill-hud" data-testid="drill-hud">
+              <div className="drill-hud-row">
+                <span className="drill-badge drill-hud-badge">AI DRILL</span>
+                <span className="drill-hud-focus">{drill.plan.focus}</span>
+                <span className="drill-hud-rep" aria-live="polite">
+                  Rep {currentRepNumber(drill.state)} / {drill.state.repeats}
+                </span>
+                <span className="drill-hud-speed">{formatSpeed(playbackSpeed)}</span>
+              </div>
+              {drill.plan.cue && <div className="drill-hud-cue">{drill.plan.cue}</div>}
+              <div className="drill-hud-progress-row">
+                <div
+                  className="drill-hud-progress"
+                  role="progressbar"
+                  aria-label="Current rep progress"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={drillProgressPct}
+                >
+                  <div className="drill-hud-progress-fill" style={{ width: `${drillProgressPct}%` }} />
+                </div>
+                <div className="drill-hud-pips" aria-hidden="true">
+                  {Array.from({ length: drill.state.repeats }, (_, i) => (
+                    <span
+                      key={i}
+                      className={`drill-hud-pip ${i < drill.state.completedReps ? 'done' : ''} ${i === drill.state.completedReps ? 'current' : ''}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Pose score overlay — shows when toggle is on */}
           {showPoseScore && grade && (phase === 'playing' || phase === 'paused') && (
             <div className="practice-score-overlay">
@@ -624,7 +958,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
           )}
 
           {/* Timeline scrubber */}
-          {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
+          {inSession && (
             <div className="practice-scrubber-container">
               <div className="practice-scrubber" onClick={handleTimelineClick}>
                 <div className="practice-scrubber-track">
@@ -662,23 +996,18 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
           )}
 
           {/* Loop & speed controls */}
-          {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
+          {inSession && (
             <div className="practice-loop-controls">
               <button
                 className={`practice-loop-btn ${loopStart !== null ? 'active' : ''}`}
-                onClick={() => { setLoopStart(currentTime); setLoopCount(0) }}
+                onClick={() => markLoopStart(currentTime)}
                 title="Set loop start (A)"
               >
                 A {loopStart !== null ? formatTime(loopStart) : ''}
               </button>
               <button
                 className={`practice-loop-btn ${loopEnd !== null ? 'active' : ''}`}
-                onClick={() => {
-                  if (loopStart !== null && currentTime - loopStart >= 3) {
-                    setLoopEnd(currentTime)
-                    setLoopCount(0)
-                  }
-                }}
+                onClick={() => markLoopEnd(currentTime)}
                 disabled={loopStart === null}
                 title="Set loop end (B)"
               >
@@ -687,25 +1016,21 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
               {(loopStart !== null || loopEnd !== null) && (
                 <button
                   className="practice-loop-btn practice-loop-clear"
-                  onClick={() => { setLoopStart(null); setLoopEnd(null); setLoopCount(0) }}
+                  onClick={clearLoop}
                   title="Clear loop"
                 >
                   Clear Loop
                 </button>
               )}
-              {loopStart !== null && loopEnd !== null && (
+              {loopStart !== null && loopEnd !== null && !drillRunning && (
                 <span className="practice-loop-count">Loop #{loopCount + 1}</span>
               )}
               <div className="practice-speed-controls">
-                {[0.5, 0.75, 1].map((speed) => (
+                {COACH_SPEEDS.map((speed) => (
                   <button
                     key={speed}
                     className={`practice-speed-btn ${playbackSpeed === speed ? 'active' : ''}`}
-                    onClick={() => {
-                      setPlaybackSpeed(speed)
-                      const refVideo = refVideoRef.current
-                      if (refVideo) refVideo.playbackRate = speed
-                    }}
+                    onClick={() => changeSpeed(speed)}
                   >
                     {speed}x
                   </button>
@@ -715,7 +1040,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
           )}
 
           {/* Toggle buttons row */}
-          {(phase === 'playing' || phase === 'paused' || phase === 'resuming') && (
+          {inSession && (
             <div className="practice-toggles-row">
               <button
                 className={`practice-toggle-btn ${showGhostOverlay ? 'active' : ''}`}
@@ -729,11 +1054,57 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
               >
                 Score {showPoseScore ? 'ON' : 'OFF'}
               </button>
+              <button
+                className={`practice-toggle-btn practice-mirror-btn ${settings.mirror ? 'active' : ''}`}
+                onClick={toggleMirror}
+                title="Flip the reference video left-right. Saved for this dance."
+                aria-pressed={settings.mirror}
+              >
+                Mirror {settings.mirror ? 'ON' : 'OFF'}
+              </button>
+              {coachPlan && !drill && (
+                <button
+                  className="practice-toggle-btn drill-start-btn"
+                  onClick={() => launchDrill(coachPlan, false)}
+                  title="Restart the AI coach drill"
+                >
+                  AI Drill
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Ready overlay — AI coach drill plan */}
+          {phase === 'ready' && coachPlan && readyRange && (
+            <div className="dance-ready-overlay drill-ready-overlay" onClick={startPractice}>
+              <div className="drill-ready-plan">
+                <div className="drill-badge">AI COACH DRILL</div>
+                <div className="drill-ready-focus">{coachPlan.focus}</div>
+                {coachPlan.cue && <div className="drill-ready-cue">{coachPlan.cue}</div>}
+                <div className="drill-ready-stats">
+                  <div className="drill-stat">
+                    <span className="drill-stat-label">Section</span>
+                    <span className="drill-stat-value drill-ready-range">
+                      {formatDrillRange(readyRange.start, readyRange.end)}
+                    </span>
+                  </div>
+                  <div className="drill-stat">
+                    <span className="drill-stat-label">Speed</span>
+                    <span className="drill-stat-value drill-ready-speed">{formatSpeed(coachPlan.playbackSpeed)}</span>
+                  </div>
+                  <div className="drill-stat">
+                    <span className="drill-stat-label">Reps</span>
+                    <span className="drill-stat-value drill-ready-reps">{clampRepeats(coachPlan.repeats)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="drill-ready-start">Tap to Start Drill</div>
+              <div className="dance-ready-hint">Tap or press Space to start · Space pauses/resumes</div>
             </div>
           )}
 
           {/* Ready overlay */}
-          {phase === 'ready' && (
+          {phase === 'ready' && !coachPlan && (
             <div className="dance-ready-overlay" onClick={startPractice}>
               <div className="dance-ready-text">Tap to Start Practice</div>
               <div className="dance-ready-hint">Click video or press Space to pause/resume</div>
@@ -748,7 +1119,7 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
           )}
 
           {/* Paused overlay */}
-          {phase === 'paused' && (
+          {phase === 'paused' && !drillComplete && (
             <div className="practice-paused-overlay">
               <div className="practice-paused-text">PAUSED</div>
               {showPoseScore && (
@@ -766,6 +1137,38 @@ export function PracticeMode({ referencePoseUrl, referenceVideoUrl, danceId, onB
                 </button>
               </div>
               <div className="practice-paused-shortcut">Space = play, Shift+Space = countdown</div>
+            </div>
+          )}
+
+          {/* AI coach drill complete */}
+          {drillComplete && drill && (
+            <div className="drill-complete-overlay" role="dialog" aria-label="Drill complete">
+              <div className="drill-complete-card">
+                <div className="drill-badge">AI COACH DRILL</div>
+                <div className="drill-complete-title">Drill complete!</div>
+                <div className="drill-complete-summary">
+                  {drill.state.repeats} {drill.state.repeats === 1 ? 'rep' : 'reps'} of {drill.plan.focus} at {formatSpeed(playbackSpeed)}
+                </div>
+                {drill.plan.encouragement && (
+                  <div className="drill-complete-encouragement">{drill.plan.encouragement}</div>
+                )}
+                <div className="drill-complete-actions">
+                  {onRetryDance && (
+                    <button className="drill-btn drill-btn-primary drill-retry-btn" onClick={onRetryDance}>
+                      Try Full Dance
+                    </button>
+                  )}
+                  <button
+                    className={`drill-btn drill-again-btn ${onRetryDance ? '' : 'drill-btn-primary'}`}
+                    onClick={drillAgain}
+                  >
+                    Drill Again
+                  </button>
+                  <button className="drill-btn drill-free-btn" onClick={freePractice}>
+                    Free Practice
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

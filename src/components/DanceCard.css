@@ -1,0 +1,34 @@
+.dance-card-mirror-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-hover);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 6px;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.dance-card-mirror-btn:hover {
+  border-color: var(--yellow);
+  color: var(--text-heading);
+}
+
+.dance-card-mirror-btn.active {
+  border-color: var(--yellow);
+  color: var(--yellow);
+  background: rgba(255, 204, 0, 0.1);
+}
+
+/* Long YouTube titles (fancams, hashtag shorts) stop at 3 lines so the cards
+   keep a tidy grid; the full title is in the h3's title tooltip. */
+.dance-card-info h3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}

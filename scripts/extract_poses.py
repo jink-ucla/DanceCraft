@@ -6,7 +6,7 @@ Uses MediaPipe BlazePose Heavy for highest accuracy pose detection.
 Includes post-processing: outlier rejection, interpolation, and temporal smoothing.
 
 Usage:
-    python scripts/extract_poses.py <video-or-url> [--output poses.json] [--max-duration 300]
+    python scripts/extract_poses.py <video-or-url> [--output poses.json] [--max-duration 0] [--max-fps 30]
 """
 
 import argparse
@@ -90,17 +90,17 @@ MAX_LIMB_LENGTHS = {
 }
 
 
-def download_video(url: str, output_dir: str, max_duration: int = 300) -> str:
-    """Download a video using yt-dlp."""
+def download_video(url: str, output_dir: str, max_duration: int = 0) -> str:
+    """Download a video using yt-dlp. max_duration <= 0 means no limit."""
     output_path = os.path.join(output_dir, "video.mp4")
     cmd = [
         "yt-dlp",
         "-f", "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best",
         "--merge-output-format", "mp4",
-        "--match-filter", f"duration <= {max_duration}",
-        "-o", output_path,
-        url,
     ]
+    if max_duration > 0:
+        cmd += ["--match-filter", f"duration <= {max_duration}"]
+    cmd += ["-o", output_path, url]
     print(f"Downloading video from {url}...")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -112,10 +112,13 @@ def download_video(url: str, output_dir: str, max_duration: int = 300) -> str:
     return output_path
 
 
-def extract_raw_poses(video_path: str) -> tuple[np.ndarray, float, float]:
+def extract_raw_poses(video_path: str, max_fps: float = 30.0) -> tuple[np.ndarray, float, float]:
     """Extract raw poses using MediaPipe BlazePose Heavy.
 
-    Returns (num_frames, 17, 3) array of [x, y, visibility], fps, duration.
+    Frames above max_fps are skipped (60 fps -> every 2nd frame), which halves
+    the Heavy-model work without hurting scoring. max_fps <= 0 analyses every frame.
+
+    Returns (num_frames, 33, 3) array of [x, y, visibility], analysed fps, duration.
     """
     model_path = os.path.join(os.path.dirname(__file__), "pose_landmarker_heavy.task")
     if not os.path.exists(model_path):
@@ -140,12 +143,22 @@ def extract_raw_poses(video_path: str) -> tuple[np.ndarray, float, float]:
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     duration = total_frames / fps if fps > 0 else 0
-    print(f"Video: {total_frames} frames, {fps:.1f} FPS, {duration:.1f}s duration")
+    step = max(1, int(round(fps / max_fps))) if fps > 0 and max_fps > 0 else 1
+    out_fps = fps / step if fps > 0 else fps
+    print(f"Video: {total_frames} frames, {fps:.1f} FPS, {duration:.1f}s duration "
+          f"(analysing every {step} frame(s) -> {out_fps:.1f} FPS)")
 
     all_keypoints = []
     frame_idx = 0
 
     while True:
+        if frame_idx % step != 0:
+            # Skipped frame: grab() advances without decoding to RGB
+            if not cap.grab():
+                break
+            frame_idx += 1
+            continue
+
         ret, frame = cap.read()
         if not ret:
             break
@@ -167,15 +180,15 @@ def extract_raw_poses(video_path: str) -> tuple[np.ndarray, float, float]:
         all_keypoints.append(kp_array)
         frame_idx += 1
 
-        if frame_idx % 30 == 0:
+        if len(all_keypoints) % 15 == 0:
             pct = round(frame_idx / total_frames * 100) if total_frames > 0 else 0
             print(f"PROGRESS:{frame_idx}/{total_frames}:{pct}", flush=True)
 
     cap.release()
     landmarker.close()
-    print(f"Extracted poses from {frame_idx} frames.")
+    print(f"Extracted poses from {len(all_keypoints)} of {frame_idx} frames.")
 
-    return np.array(all_keypoints), fps, duration
+    return np.array(all_keypoints), out_fps, duration
 
 
 def postprocess_poses(raw: np.ndarray, fps: float) -> np.ndarray:
@@ -335,7 +348,10 @@ def main():
     )
     parser.add_argument("url", help="YouTube video URL or local file path")
     parser.add_argument("--output", "-o", default="poses.json")
-    parser.add_argument("--max-duration", type=int, default=300)
+    parser.add_argument("--max-fps", type=float, default=30.0,
+                        help="Analyse at most this many frames per second (0 = every frame)")
+    parser.add_argument("--max-duration", type=int, default=0,
+                        help="Only for URLs: skip videos longer than this many seconds (0 = no limit)")
     args = parser.parse_args()
 
     if os.path.isfile(args.url):
@@ -346,7 +362,7 @@ def main():
         video_path = download_video(args.url, tmpdir, args.max_duration)
 
     try:
-        raw_keypoints, fps, duration = extract_raw_poses(video_path)
+        raw_keypoints, fps, duration = extract_raw_poses(video_path, args.max_fps)
 
         print("Post-processing poses...")
         cleaned = postprocess_poses(raw_keypoints, fps)

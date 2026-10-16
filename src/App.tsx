@@ -10,18 +10,44 @@ import { AddDance } from './components/AddDance'
 import { ReplayMode } from './components/ReplayMode'
 import { PracticeMode } from './components/PracticeMode'
 import { DebugMode } from './components/DebugMode'
-import { computePostDanceScore } from './scoring/dtw'
-import { computeRank } from './scoring/dtw'
+import { PlayerSetup } from './components/PlayerSetup'
+import { computeHonestRank } from './scoring/honest'
+import { computeDanceCraftScore } from './scoring/dancecraft'
 import { saveScore } from './storage/scores'
 import type { Difficulty } from './storage/scores'
-import { loadDanceSettings } from './storage/danceSettings'
-import type { DTWResult, TimestampedPose } from './scoring/dtw'
+import { loadDanceSettings, applyPendingMirror } from './storage/danceSettings'
+import { loadBundledDances } from './storage/bundledDances'
+import {
+  GUEST_NAME,
+  getCurrentPlayer,
+  getHostForDance,
+  getLeaderboard,
+  getPreviousAttempt,
+  isHostAttemptFor,
+  recordArenaAttempt,
+  resolvePlayerName,
+  setCurrentPlayer,
+} from './storage/arena'
+import type { ArenaPlayer, LeaderboardEntry } from './storage/arena'
+import { toCoachAttempt } from './components/scoreEvidence'
+import type { ScoredResult } from './components/scoreEvidence'
+import { createObjectUrlSlot } from './components/objectUrl'
+import type { AttemptSummary, CoachPlan } from './coach/types'
+import type { TimestampedPose } from './scoring/dtw'
 import type { Pose } from './scoring/types'
+import { API_BASE } from './api/coach'
 import './App.css'
 
-const API_BASE = 'http://localhost:3001'
+const HIDDEN_BUNDLED_KEY = 'groovy_hidden_bundled'
 
-const BUNDLED_DANCES: DanceInfo[] = []
+function readHiddenBundled(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(HIDDEN_BUNDLED_KEY) || '[]')
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
 
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60)
@@ -50,9 +76,10 @@ interface ApiDance {
 
 function apiDanceToDanceInfo(dance: ApiDance): DanceInfo {
   const videoId = extractYoutubeVideoId(dance.youtubeUrl)
+  // Uploaded / clipped dances have no YouTube id — use the server-generated thumbnail.
   const thumbnail = videoId
     ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
-    : undefined
+    : dance.thumbnailPath ? `${API_BASE}/api/dances/${dance.id}/thumbnail` : undefined
 
   return {
     id: `api-${dance.id}`,
@@ -65,16 +92,224 @@ function apiDanceToDanceInfo(dance: ApiDance): DanceInfo {
   }
 }
 
+/** GET /api/dances -> completed dances as DanceInfo. Throws when the server is unreachable. */
+async function fetchCompletedApiDances(signal?: AbortSignal): Promise<DanceInfo[]> {
+  const res = await fetch(`${API_BASE}/api/dances`, { signal })
+  if (!res.ok) throw new Error('Failed to fetch dances')
+  const data: ApiDance[] = await res.json()
+  return data.filter((d) => d.status === 'complete').map(apiDanceToDanceInfo)
+}
+
+/** "m:ss" or "h:mm:ss" -> seconds; 0 when unparseable. */
+function parseDurationLabel(label: string): number {
+  const parts = label.trim().split(':')
+  if (parts.length < 2 || parts.length > 3 || parts.some((p) => !/^\d+$/.test(p))) return 0
+  return parts.reduce((total, p) => total * 60 + Number(p), 0)
+}
+
+/**
+ * Reference video length in seconds for the coach: last reference pose time,
+ * falling back to the dance's "m:ss" label, then the last scored section.
+ */
+function computeDurationSeconds(referencePoses: TimestampedPose[], dance: DanceInfo, result: ScoredResult): number {
+  const lastPoseTime = referencePoses.reduce((max, p) => (Number.isFinite(p.time) ? Math.max(max, p.time) : max), 0)
+  if (lastPoseTime > 0) return lastPoseTime
+  const fromLabel = parseDurationLabel(dance.duration)
+  if (fromLabel > 0) return fromLabel
+  const sections = result.sectionScores
+  return sections.length > 0 ? sections[sections.length - 1].endTime : 0
+}
+
+/**
+ * Stable React key per CoachPlan object so PracticeMode remounts cleanly
+ * whenever a new plan arrives (same plan object -> same key).
+ */
+const coachPlanKeys = new WeakMap<CoachPlan, number>()
+let nextCoachPlanKey = 1
+function practiceKey(dance: DanceInfo, plan: CoachPlan | undefined): string {
+  if (!plan) return `${dance.id}:free`
+  let key = coachPlanKeys.get(plan)
+  if (key === undefined) {
+    key = nextCoachPlanKey++
+    coachPlanKeys.set(plan, key)
+  }
+  return `${dance.id}:plan-${key}`
+}
+
+type ArenaHost = { name: string; score: number }
+
+/** Everything the results screen needs; carried through replay and back. */
+interface ResultsData {
+  dance: DanceInfo
+  /** HonestResult in real runs: scores + optional evidence (coverage, motion, notes, ...). */
+  result: ScoredResult
+  difficulty: Difficulty
+  playerName: string
+  /** Same player's previous attempt on this dance (read BEFORE recording this one). */
+  previousAttempt: AttemptSummary | null
+  isHostAttempt: boolean
+  /** Reference video length (s); bounds the coach drill window. */
+  durationSeconds: number
+  /** Snapshotted when the view is created so ResultsScreen gets referentially stable props. */
+  host: ArenaHost | null
+  leaderboard: LeaderboardEntry[]
+}
+
+/** Copy just the ResultsData fields out of a results/replay view. */
+function pickResultsData(v: ResultsData): ResultsData {
+  return {
+    dance: v.dance,
+    result: v.result,
+    difficulty: v.difficulty,
+    playerName: v.playerName,
+    previousAttempt: v.previousAttempt,
+    isHostAttempt: v.isHostAttempt,
+    durationSeconds: v.durationSeconds,
+    host: v.host,
+    leaderboard: v.leaderboard,
+  }
+}
+
 type View =
   | { screen: 'home' }
   | { screen: 'dance'; dance: DanceInfo; difficulty: Difficulty }
-  | { screen: 'results'; dance: DanceInfo; result: DTWResult; difficulty: Difficulty }
+  | ({ screen: 'results' } & ResultsData)
   | { screen: 'settings' }
   | { screen: 'history' }
-  | { screen: 'replay'; dance: DanceInfo; result: DTWResult; difficulty: Difficulty }
+  | ({ screen: 'replay' } & ResultsData)
   | { screen: 'history-replay'; session: Session; dance: DanceInfo }
-  | { screen: 'practice'; dance: DanceInfo }
+  | {
+      screen: 'practice'
+      dance: DanceInfo
+      coachPlan?: CoachPlan
+      difficulty?: Difficulty
+      /** Coach drill opened from the results screen: Back returns there. */
+      returnTo?: ResultsData
+    }
   | { screen: 'debug'; dance: DanceInfo }
+
+// ---------------------------------------------------------------------------
+// DEV-ONLY PREVIEW HOOK: webcam-free verification and event rehearsal.
+//
+//   /?preview=results         Results screen with a realistic mock attempt
+//                             (weak 10s-20s section, previous attempt 51%,
+//                             host Wasil 78%, honest-scoring evidence with
+//                             legs out of frame) so the Claude coach + battle
+//                             UI can be exercised without dancing. The first
+//                             dance's reference video stands in for the
+//                             user's clip (badged "Preview clip").
+//   /?preview=practice-drill  PracticeMode on the first available dance,
+//                             driven by a sample coach plan (10s-16s, 0.5x,
+//                             3 reps). Stays on home when no dance exists.
+//
+// Gated on import.meta.env.DEV: production builds never read the param.
+// ---------------------------------------------------------------------------
+type PreviewMode = 'results' | 'practice-drill'
+
+function readPreviewMode(): PreviewMode | null {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return null
+  const value = new URLSearchParams(window.location.search).get('preview')
+  return value === 'results' || value === 'practice-drill' ? value : null
+}
+
+const PREVIEW_PLACEHOLDER_DANCE: DanceInfo = {
+  id: 'preview',
+  title: 'Preview Dance',
+  poseDataUrl: '',
+  duration: '0:27',
+}
+
+/** Shaped like a HonestResult (src/scoring/honest.ts), notes worded the way it words them. */
+function buildPreviewResult(): ScoredResult {
+  const overallScore = 0.63
+  return {
+    overallScore,
+    sectionScores: [
+      { startTime: 0, endTime: 10, score: 0.82 },
+      { startTime: 10, endTime: 20, score: 0.41 },
+      { startTime: 20, endTime: 27, score: 0.66 },
+    ],
+    bodyPartScores: [
+      { name: 'Arms', score: 0.58, tracked: true },
+      { name: 'Legs', score: 0.14, tracked: false },
+    ],
+    rank: computeHonestRank(overallScore),
+    alignment: [],
+    coverage: 0.74,
+    motionMatch: 0.52,
+    latencyMs: 200,
+    mirrored: true,
+    notes: [
+      'We could only track you for 74% of the dance — stay in frame from start to finish.',
+      'Your legs were out of frame — step back so your full body is visible.',
+    ],
+  }
+}
+
+function buildPreviewPreviousAttempt(): AttemptSummary {
+  const overallScore = 0.51
+  return {
+    overallScore,
+    rank: computeHonestRank(overallScore),
+    sectionScores: [
+      { startTime: 0, endTime: 10, score: 0.7 },
+      { startTime: 10, endTime: 20, score: 0.3 },
+      { startTime: 20, endTime: 27, score: 0.53 },
+    ],
+    bodyPartScores: [
+      { name: 'Arms', score: 0.44 },
+      { name: 'Legs', score: 0.1 },
+    ],
+    coverage: 0.61,
+    motionMatch: 0.41,
+    latencyMs: 300,
+    mirrored: true,
+    untrackedBodyParts: ['Legs'],
+    notes: [
+      'We could only track you for 61% of the dance — stay in frame from start to finish.',
+      'Your legs were out of frame — step back so your full body is visible.',
+      'You were consistently behind the music — try to anticipate the next move.',
+    ],
+  }
+}
+
+function buildPreviewCoachPlan(): CoachPlan {
+  return {
+    summary: 'Strong opening at 82%, but the 10s–20s section dropped to 41%: your arms are trailing the beat there.',
+    focus: 'Arms · 10s–16s',
+    startTime: 10,
+    endTime: 16,
+    playbackSpeed: 0.5,
+    repeats: 3,
+    cue: 'Lead with your elbows and snap each arm shape to full extension right on the count.',
+    encouragement: 'Wasil is sitting at 78%. Clean up this section and the crown is yours.',
+  }
+}
+
+function buildPreviewView(mode: PreviewMode, dance: DanceInfo | null): View | null {
+  if (mode === 'results') {
+    return {
+      screen: 'results',
+      dance: dance ?? PREVIEW_PLACEHOLDER_DANCE,
+      result: buildPreviewResult(),
+      difficulty: 'normal',
+      playerName: GUEST_NAME,
+      previousAttempt: buildPreviewPreviousAttempt(),
+      isHostAttempt: false,
+      durationSeconds: 27,
+      host: { name: 'Wasil', score: 0.78 },
+      leaderboard: [
+        { name: 'Wasil', score: 0.78, isHost: true },
+        { name: GUEST_NAME, score: 0.63, isHost: false },
+        { name: 'Maya', score: 0.59, isHost: false },
+        { name: 'Leo', score: 0.47, isHost: false },
+      ],
+    }
+  }
+  if (!dance) return null
+  return { screen: 'practice', dance, coachPlan: buildPreviewCoachPlan(), difficulty: 'normal' }
+}
+// -------------------------- end dev preview hook --------------------------
 
 interface ProcessingJob {
   jobId: string
@@ -90,26 +325,45 @@ function App() {
   const [pendingDance, setPendingDance] = useState<DanceInfo | null>(null)
   const [showAddDance, setShowAddDance] = useState(false)
   const [apiDances, setApiDances] = useState<DanceInfo[]>([])
-  const [hiddenBundled, setHiddenBundled] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('groovy_hidden_bundled') || '[]') } catch { return [] }
-  })
+  const [bundledDances, setBundledDances] = useState<DanceInfo[]>([])
+  const [hiddenBundled, setHiddenBundled] = useState<string[]>(readHiddenBundled)
+  const [currentPlayer, setCurrentPlayerState] = useState<ArenaPlayer | null>(getCurrentPlayer)
+  // Identity being edited in the difficulty modal; saved when a difficulty is picked
+  const [playerDraft, setPlayerDraft] = useState<ArenaPlayer>({ name: '', isHost: false })
+  const [previewMode, setPreviewMode] = useState<PreviewMode | null>(readPreviewMode)
   const [dancesLoading, setDancesLoading] = useState(true)
   const [dancesError, setDancesError] = useState<string | null>(null)
   const [processingJobs, setProcessingJobs] = useState<ProcessingJob[]>([])
   const pollIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map())
   const userPosesRef = useRef<TimestampedPose[]>([])
   const referencePosesRef = useRef<TimestampedPose[]>([])
+  const referenceGeometryRef = useRef<{ width: number; height: number } | undefined>(undefined)
   const recordingBlobRef = useRef<Blob | null>(null)
+  // One object URL per recording, shared by the results clip and the replay;
+  // revoked when the recording is replaced/cleared and when App unmounts.
+  const [recordingUrlSlot] = useState(createObjectUrlSlot)
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null)
+  // DEV preview only: the first dance's reference video stands in for the user's clip
+  const [previewClipUrl, setPreviewClipUrl] = useState<string | null>(null)
+
+  const setRecording = useCallback((blob: Blob | null) => {
+    recordingBlobRef.current = blob
+    setRecordingUrl(recordingUrlSlot.set(blob))
+    if (blob) setPreviewClipUrl(null)
+  }, [recordingUrlSlot])
+
+  const clearRecording = useCallback(() => {
+    setRecording(null)
+    setPreviewClipUrl(null)
+  }, [setRecording])
+
+  useEffect(() => () => recordingUrlSlot.dispose(), [recordingUrlSlot])
 
   const fetchDances = useCallback(async () => {
     setDancesLoading(true)
     setDancesError(null)
     try {
-      const res = await fetch(`${API_BASE}/api/dances`)
-      if (!res.ok) throw new Error('Failed to fetch dances')
-      const data: ApiDance[] = await res.json()
-      const completed = data.filter((d) => d.status === 'complete')
-      setApiDances(completed.map(apiDanceToDanceInfo))
+      setApiDances(await fetchCompletedApiDances())
     } catch {
       setDancesError('Could not connect to server. Showing pre-bundled dances.')
       setApiDances([])
@@ -121,6 +375,35 @@ function App() {
   useEffect(() => {
     fetchDances()
   }, [fetchDances])
+
+  // Bundled dances (public/dances/manifest.json): loaded once, independent of the API server
+  useEffect(() => {
+    const controller = new AbortController()
+    loadBundledDances(undefined, { signal: controller.signal }).then((dances) => {
+      if (!controller.signal.aborted) setBundledDances(dances)
+    })
+    return () => controller.abort()
+  }, [])
+
+  // DEV-only: resolve ?preview=... once the dance lists are known (see readPreviewMode)
+  useEffect(() => {
+    if (!import.meta.env.DEV || !previewMode) return
+    const controller = new AbortController()
+    const { signal } = controller
+    Promise.all([
+      fetchCompletedApiDances(signal).catch((): DanceInfo[] => []),
+      loadBundledDances(undefined, { signal }),
+    ]).then(([api, bundled]) => {
+      if (signal.aborted) return
+      const hidden = readHiddenBundled()
+      const firstDance = [...api, ...bundled.filter((d) => !hidden.includes(d.id))][0] ?? null
+      const next = buildPreviewView(previewMode, firstDance)
+      if (next) setView(next)
+      if (previewMode === 'results') setPreviewClipUrl(firstDance?.videoUrl ?? null)
+      setPreviewMode(null)
+    })
+    return () => controller.abort()
+  }, [previewMode])
 
   const trackJob = useCallback((jobId: string, title?: string, youtubeUrl?: string) => {
     setProcessingJobs((prev) => {
@@ -137,6 +420,7 @@ function App() {
         const job = await res.json()
 
         if (job.status === 'complete') {
+          applyPendingMirror(jobId, job.danceId)
           clearInterval(pollIntervalsRef.current.get(jobId)!)
           pollIntervalsRef.current.delete(jobId)
           setProcessingJobs((prev) => prev.filter((j) => j.jobId !== jobId))
@@ -180,8 +464,10 @@ function App() {
   }, [trackJob])
 
   useEffect(() => {
+    // The Map is mutated in place (never replaced), so capturing it here is equivalent
+    const intervals = pollIntervalsRef.current
     return () => {
-      pollIntervalsRef.current.forEach((interval) => clearInterval(interval))
+      intervals.forEach((interval) => clearInterval(interval))
     }
   }, [])
 
@@ -217,7 +503,7 @@ function App() {
   })
 
   // Merge: processing first, then completed API dances, then bundled
-  const visibleBundled = BUNDLED_DANCES.filter((d) => !hiddenBundled.includes(d.id))
+  const visibleBundled = bundledDances.filter((d) => !hiddenBundled.includes(d.id))
   const allDances = dancesError
     ? visibleBundled
     : [...processingDances, ...apiDances, ...visibleBundled]
@@ -226,7 +512,7 @@ function App() {
     if (dance.source === 'bundled') {
       setHiddenBundled((prev) => {
         const next = [...prev, dance.id]
-        localStorage.setItem('groovy_hidden_bundled', JSON.stringify(next))
+        localStorage.setItem(HIDDEN_BUNDLED_KEY, JSON.stringify(next))
         return next
       })
       return
@@ -242,16 +528,36 @@ function App() {
     }
   }, [])
 
-  const handleDanceFinish = useCallback((_score: number, _hits: number, _total: number) => {
+  const handleDanceFinish = useCallback(() => {
     if (view.screen !== 'dance') return
 
-    const result = computePostDanceScore(
+    // Held-out winner: movement hits, bounded timing, visibility and geometry.
+    const result = computeDanceCraftScore(
       referencePosesRef.current,
       userPosesRef.current,
+      10,
+      referenceGeometryRef.current,
     )
 
     const scorePct = result.overallScore * 100
-    const rank = computeRank(result.overallScore)
+    const rank = result.rank
+
+    // Arena: read this player's previous attempt BEFORE recording the new one
+    const player = currentPlayer ?? { name: GUEST_NAME, isHost: false }
+    const previousAttempt = getPreviousAttempt(view.dance.id, player.name)
+    // The host re-dancing without ticking "I'm the host" is still the host
+    // (otherwise the results would show a "Wasil vs Wasil" battle)
+    const isHostAttempt = isHostAttemptFor(view.dance.id, player)
+    recordArenaAttempt({
+      danceId: view.dance.id,
+      player: player.name,
+      score: result.overallScore,
+      rank,
+      date: new Date().toISOString(),
+      isHost: isHostAttempt,
+      // Scores + evidence, so the next attempt's coach request can compare both
+      attempt: toCoachAttempt(result),
+    })
 
     // Save to score history (localStorage)
     saveScore({
@@ -284,16 +590,65 @@ function App() {
       }
     }
 
-    setView({ screen: 'results', dance: view.dance, result, difficulty: view.difficulty })
-  }, [view])
+    setView({
+      screen: 'results',
+      dance: view.dance,
+      result,
+      difficulty: view.difficulty,
+      playerName: player.name,
+      previousAttempt,
+      isHostAttempt,
+      durationSeconds: computeDurationSeconds(referencePosesRef.current, view.dance, result),
+      host: getHostForDance(view.dance.id),
+      leaderboard: getLeaderboard(view.dance.id, 5),
+    })
+  }, [view, currentPlayer])
+
+  // Stable identity (functional update) so ResultsScreen effects don't re-fire on App re-renders
+  const handleStartCoachDrill = useCallback((plan: CoachPlan) => {
+    setView((v) => (v.screen === 'results'
+      ? { screen: 'practice', dance: v.dance, coachPlan: plan, difficulty: v.difficulty, returnTo: pickResultsData(v) }
+      : v))
+  }, [])
 
   const handleRecordingComplete = useCallback((blob: Blob) => {
-    recordingBlobRef.current = blob
-  }, [])
+    setRecording(blob)
+  }, [setRecording])
 
   const handleRecordPose = useCallback((pose: Pose, time: number) => {
     userPosesRef.current.push({ time, pose })
   }, [])
+
+  const openDifficultyModal = (dance: DanceInfo) => {
+    setPlayerDraft({ name: currentPlayer?.name ?? '', isHost: currentPlayer?.isHost ?? false })
+    setPendingDance(dance)
+  }
+
+  // "Next challenger": forget the current identity so the next person types their own name
+  const handleNextChallenger = () => {
+    setPlayerDraft({ name: '', isHost: false })
+    setCurrentPlayer(null)
+    setCurrentPlayerState(null)
+  }
+
+  // Picking a difficulty saves the player (empty name -> "Guest") and starts the dance
+  const startDance = (dance: DanceInfo, difficulty: Difficulty) => {
+    const player: ArenaPlayer = { name: resolvePlayerName(playerDraft.name), isHost: playerDraft.isHost }
+    setCurrentPlayer(player)
+    setCurrentPlayerState(player)
+    userPosesRef.current = []
+    clearRecording()
+    setView({ screen: 'dance', dance, difficulty })
+    setPendingDance(null)
+  }
+
+  if (previewMode) {
+    return (
+      <div className="app">
+        <p className="arena-preview-loading">Loading preview…</p>
+      </div>
+    )
+  }
 
   if (view.screen === 'history') {
     const handleHistoryReplay = (session: Session) => {
@@ -350,13 +705,21 @@ function App() {
   }
 
   if (view.screen === 'practice') {
+    const { dance, coachPlan, difficulty, returnTo } = view
     return (
       <div className="app">
         <PracticeMode
-          referencePoseUrl={view.dance.poseDataUrl}
-          referenceVideoUrl={view.dance.videoUrl}
-          danceId={view.dance.id}
-          onBack={() => setView({ screen: 'home' })}
+          key={practiceKey(dance, coachPlan)}
+          referencePoseUrl={dance.poseDataUrl}
+          referenceVideoUrl={dance.videoUrl}
+          danceId={dance.id}
+          coachPlan={coachPlan ?? null}
+          onRetryDance={() => {
+            userPosesRef.current = []
+            clearRecording()
+            setView({ screen: 'dance', dance, difficulty: difficulty ?? 'normal' })
+          }}
+          onBack={() => setView(returnTo ? { ...returnTo, screen: 'results' } : { screen: 'home' })}
         />
       </div>
     )
@@ -376,18 +739,20 @@ function App() {
     )
   }
 
-  if (view.screen === 'replay') {
-    const userVideoUrl = recordingBlobRef.current
-      ? URL.createObjectURL(recordingBlobRef.current)
-      : ''
+  // The user's clip for results/replay: the recording, or (dev preview) a stand-in
+  const clipUrl = recordingUrl ?? previewClipUrl
+  const isPreviewClip = !recordingUrl && !!previewClipUrl
 
+  if (view.screen === 'replay') {
     return (
       <div className="app">
         <ReplayMode
           referenceVideoUrl={view.dance.videoUrl}
           referencePoseUrl={view.dance.poseDataUrl}
           danceId={view.dance.id}
-          userVideoUrl={userVideoUrl}
+          userVideoUrl={clipUrl ?? ''}
+          userVideoLabel={isPreviewClip ? 'PREVIEW CLIP' : undefined}
+          mirrorUserVideo={!isPreviewClip}
           userPoses={userPosesRef.current}
           sectionScores={view.result.sectionScores}
           sessionMeta={{
@@ -395,15 +760,13 @@ function App() {
             score: view.result.overallScore * 100,
             rank: view.result.rank,
           }}
-          onBack={() => setView({ screen: 'results', dance: view.dance, result: view.result, difficulty: view.difficulty })}
+          onBack={() => setView({ ...view, screen: 'results' })}
         />
       </div>
     )
   }
 
   if (view.screen === 'results') {
-    const hasRecording = !!recordingBlobRef.current
-
     return (
       <div className="app">
         <ResultsScreen
@@ -411,14 +774,26 @@ function App() {
           danceName={view.dance.title}
           onRetry={() => {
             userPosesRef.current = []
-            recordingBlobRef.current = null
+            clearRecording()
             setView({ screen: 'dance', dance: view.dance, difficulty: view.difficulty })
           }}
           onHome={() => {
-            recordingBlobRef.current = null
+            clearRecording()
             setView({ screen: 'home' })
           }}
-          onReplay={hasRecording ? () => setView({ screen: 'replay', dance: view.dance, result: view.result, difficulty: view.difficulty }) : undefined}
+          onReplay={clipUrl ? () => setView({ ...view, screen: 'replay' }) : undefined}
+          clipUrl={clipUrl}
+          clipLabel={isPreviewClip ? 'Preview clip' : undefined}
+          onOpenHistory={() => setView({ screen: 'history' })}
+          danceId={view.dance.id}
+          poseDataUrl={view.dance.poseDataUrl || undefined}
+          durationSeconds={view.durationSeconds}
+          playerName={view.playerName}
+          previousAttempt={view.previousAttempt}
+          host={view.host}
+          isHostAttempt={view.isHostAttempt}
+          leaderboard={view.leaderboard}
+          onStartCoachDrill={handleStartCoachDrill}
         />
       </div>
     )
@@ -440,6 +815,9 @@ function App() {
           onReferencePosesLoaded={(poses) => {
             referencePosesRef.current = poses
           }}
+          onReferenceGeometryLoaded={(geometry) => {
+            referenceGeometryRef.current = geometry
+          }}
           onBack={() => setView({ screen: 'home' })}
         />
       </div>
@@ -452,9 +830,8 @@ function App() {
         dances={allDances}
         loading={dancesLoading}
         error={dancesError}
-        onSelectDance={(dance) => {
-          setPendingDance(dance)
-        }}
+        currentPlayer={currentPlayer}
+        onSelectDance={openDifficultyModal}
         onPracticeDance={(dance) => setView({ screen: 'practice', dance })}
         onDeleteDance={handleDeleteDance}
         onDebugDance={(dance) => setView({ screen: 'debug', dance })}
@@ -464,6 +841,7 @@ function App() {
       />
       {showAddDance && (
         <AddDance
+          apiBase={API_BASE}
           onClose={() => setShowAddDance(false)}
           onDanceAdded={() => {
             fetchDances()
@@ -475,18 +853,20 @@ function App() {
         <div className="difficulty-overlay">
           <div className="difficulty-modal">
             <h3 className="difficulty-title">{pendingDance.title}</h3>
+            <PlayerSetup
+              name={playerDraft.name}
+              isHost={playerDraft.isHost}
+              onChange={setPlayerDraft}
+              onNextChallenger={handleNextChallenger}
+              hostToBeat={getHostForDance(pendingDance.id)}
+            />
             <p className="difficulty-subtitle">Choose Difficulty</p>
             <div className="difficulty-options">
               {(['easy', 'normal', 'hard'] as const).map((d) => (
                 <button
                   key={d}
                   className={`difficulty-btn difficulty-btn-${d}`}
-                  onClick={() => {
-                    userPosesRef.current = []
-                    recordingBlobRef.current = null
-                    setView({ screen: 'dance', dance: pendingDance, difficulty: d })
-                    setPendingDance(null)
-                  }}
+                  onClick={() => startDance(pendingDance, d)}
                 >
                   <span className="difficulty-btn-label">{d.charAt(0).toUpperCase() + d.slice(1)}</span>
                   <span className="difficulty-btn-detail">

@@ -1,4 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Hero } from './Hero'
+import { CrownIcon } from './Leaderboard'
+import { getHostForDance } from '../storage/arena'
+import type { ArenaPlayer } from '../storage/arena'
+import { loadDanceSettings, setDanceMirror } from '../storage/danceSettings'
+import './Arena.css'
+import './DanceCard.css'
 
 export interface DanceInfo {
   id: string
@@ -24,11 +31,17 @@ interface HomeScreenProps {
   processingCount?: number
   loading?: boolean
   error?: string | null
+  /** Who is dancing on this device (shown as a chip in the hero). */
+  currentPlayer?: ArenaPlayer | null
 }
 
 function getPersonalBest(danceId: string): number | null {
-  const stored = localStorage.getItem(`groovy_best_${danceId}`)
-  return stored ? JSON.parse(stored) : null
+  try {
+    const stored = localStorage.getItem(`groovy_best_${danceId}`)
+    return stored ? JSON.parse(stored) : null
+  } catch {
+    return null
+  }
 }
 
 export function HomeScreen({
@@ -43,17 +56,33 @@ export function HomeScreen({
   processingCount = 0,
   loading = false,
   error = null,
+  currentPlayer = null,
 }: HomeScreenProps) {
-  const [bests, setBests] = useState<Record<string, number | null>>({})
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
+  // Per-dance mirror flag (saved in dance settings); local overrides re-render after a toggle.
+  const [mirrorOverrides, setMirrorOverrides] = useState<Record<string, boolean>>({})
+  const mirrors = useMemo(
+    () => Object.fromEntries(dances.map((d) => [d.id, mirrorOverrides[d.id] ?? loadDanceSettings(d.id).mirror])),
+    [dances, mirrorOverrides],
+  )
 
-  useEffect(() => {
+  // Personal bests + host challenge per dance, read from localStorage.
+  // HomeScreen remounts every time the player returns home, so this is fresh.
+  const bests = useMemo(() => {
     const scores: Record<string, number | null> = {}
     for (const dance of dances) {
       scores[dance.id] = getPersonalBest(dance.id)
     }
-    setBests(scores)
+    return scores
+  }, [dances])
+
+  const hostChallenges = useMemo(() => {
+    const hosts: Record<string, { name: string; score: number } | null> = {}
+    for (const dance of dances) {
+      hosts[dance.id] = dance.processing ? null : getHostForDance(dance.id)
+    }
+    return hosts
   }, [dances])
 
   // Close menu when clicking outside
@@ -75,16 +104,12 @@ export function HomeScreen({
   }
 
   return (
-    <div className="home-screen">
+    <div className="home-screen home-screen-hero">
       <header className="home-header">
-        <h1>Groovy</h1>
-        <p className="home-subtitle">Dance along to any video with real-time pose feedback</p>
+        <h1>DanceCraft</h1>
+        <p className="home-subtitle">AI Motion Arena · powered by Claude</p>
+        {/* "+ Add Dance" lives in the hero CTAs (one button, so text locators stay unique). */}
         <div className="home-nav-buttons">
-          {onAddDance && (
-            <button className="home-nav-btn home-add-btn" onClick={onAddDance}>
-              + Add Dance
-            </button>
-          )}
           {onHistory && (
             <button className="home-nav-btn" onClick={onHistory}>
               History
@@ -97,6 +122,15 @@ export function HomeScreen({
           )}
         </div>
       </header>
+
+      <Hero
+        dances={dances}
+        loading={loading}
+        currentPlayer={currentPlayer}
+        onSelectDance={onSelectDance}
+        onPracticeDance={onPracticeDance}
+        onAddDance={onAddDance}
+      />
 
       {processingCount > 0 && (
         <div className="home-processing-indicator">
@@ -128,12 +162,11 @@ export function HomeScreen({
       {!loading && dances.length === 0 && !error && (
         <div className="home-empty">
           <p className="home-empty-title">No dances yet</p>
-          <p className="home-empty-text">Add your first dance by pasting a YouTube URL!</p>
-          {onAddDance && (
-            <button className="home-empty-btn" onClick={onAddDance}>
-              + Add Dance
-            </button>
-          )}
+          <p className="home-empty-text">
+            {onAddDance
+              ? 'Use the Add Dance button above to paste a YouTube link or upload a clip.'
+              : 'Add your first dance by pasting a YouTube URL!'}
+          </p>
         </div>
       )}
 
@@ -176,7 +209,7 @@ export function HomeScreen({
                 })()}
               </div>
               <div className="dance-card-info">
-                <h3>{dance.title}</h3>
+                <h3 title={dance.title}>{dance.title}</h3>
                 {!dance.processing && (
                   <>
                     <span className="dance-card-duration">{dance.duration}</span>
@@ -185,6 +218,26 @@ export function HomeScreen({
                         Best: {Math.floor(bests[dance.id]!)}
                       </span>
                     )}
+                    {hostChallenges[dance.id] && (
+                      <span className="dance-card-to-beat">
+                        <CrownIcon size={12} />
+                        <span>Score to beat:</span>
+                        <span className="dance-card-to-beat-name">{hostChallenges[dance.id]!.name}</span>
+                        <span>{Math.round(hostChallenges[dance.id]!.score * 100)}%</span>
+                      </span>
+                    )}
+                    <button
+                      className={`dance-card-mirror-btn ${mirrors[dance.id] ? 'active' : ''}`}
+                      title="Flip the video so it can be copied like a mirror (saved for this dance)"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const next = !mirrors[dance.id]
+                        setDanceMirror(dance.id, next)
+                        setMirrorOverrides((prev) => ({ ...prev, [dance.id]: next }))
+                      }}
+                    >
+                      ⇋ Mirror {mirrors[dance.id] ? 'on' : 'off'}
+                    </button>
                     {onPracticeDance && (
                       <button
                         className="dance-card-practice-btn"

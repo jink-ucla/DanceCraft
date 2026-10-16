@@ -1,8 +1,52 @@
 # Project Status
 
-**Last updated:** 2026-03-15
+**Last updated:** 2026-10-15
 
-**Current state:** Phase 7 - UX Polish & Practice Mode Redesign
+**Current state:** DanceCraft - AI Motion Arena integrated on top of Groovy (needs a live-webcam rehearsal before the event)
+
+## DanceCraft (2026-10-15)
+
+Host records a short dance, challengers dance it live, Claude reads the real scores and writes a practice plan that drives PracticeMode, then the challenger retries and battles the host's score. Runbook: `docs/dancecraft.md`.
+
+### Final verification and local demo (2026-10-15)
+- Promoted the frozen `keymoment-hits` candidate through `src/scoring/dancecraft.ts`; reference video aspect ratio is provided from loaded video metadata. The interim scorer remains available in source.
+- Independent held-out lab comparison: 39/39 target checks and 28/28 ranking checks, ahead of the interim scorer (11/39 and 16/28). A second production-adapter seed also passed 39/39 and 28/28; scale, translation, mirror, malformed/duplicate poses, stillness and missing-body checks passed. These checks use synthetic perturbations of one routine and recorded still sessions, not a human dance-accuracy benchmark.
+- Final integrated source: 524/524 unit tests, TypeScript build and production build pass. Coach browser smoke tests passed 2/2. Changed scoring/App/DanceMode files have no ESLint errors and three existing DanceMode hook warnings. Whole-repository lint still has pre-existing errors in other files; older bundled-dance and visual-baseline E2E cases remain stale.
+- Desktop/mobile production browser check: three actual dance cards, working latest-history replay with both reference and user videos decoded, replay mirror persistence, no page errors or horizontal overflow. No physical-webcam rehearsal was performed by this verification.
+- Local frontend is restored at `http://localhost:5174`, using the verified external `final-app-dist` build with `VITE_API_BASE=http://localhost:3002`; backend was restarted at `http://localhost:3002`. Artifacts and screenshots are under `C:/Users/jink/Documents/DanceCraft-Submission/evidence/`.
+- Latest backend fallback was checked offline: framing and low movement are explained first; out-of-frame legs receive framing guidance, not a technique penalty. The configured Anthropic key reaches the API but the direct request was rejected for insufficient credit balance. Live Claude generation remains blocked by billing; `claudeEnabled: true` means configured, not a successful paid inference.
+
+### What shipped
+- **Shared contract** `src/coach/types.ts` + pure helpers `src/coach/plan.ts` (sanitize/fallback plan, `decideBattle`, fallback verdict) used by both server and client
+- **Coach API** `server/routes/coach.ts` + `server/coach/*`: `GET /api/coach/status`, `POST /api/coach`, `POST /api/coach/battle`; Claude via `@anthropic-ai/sdk` structured outputs (`claude-sonnet-5-5`, effort low, server-side refusal fallback); zod-validated bodies (400 on bad input); every failure returns HTTP 200 `source: 'fallback'` from the deterministic built-in coach
+- **Results screen**: AI Coach panel (summary, focus, section/speed/reps, cue, improvement, "Practice this"), "Beat <host>?" battle panel with crown/confetti and mini leaderboard, "+N% vs last try" chip, per-section deltas, weakest-section highlight; client `src/api/coach.ts` degrades to the built-in coach when the server is down
+- **Coach drill in PracticeMode**: plan seeks to its section, loops at the plan speed for N reps (`src/coach/drill.ts`), HUD + drill-complete overlay ("Try Full Dance", "Drill Again", "Free Practice"); rAF loop rewritten to read loop bounds from refs (fixes stale A/B loop bug)
+- **Characters**: `TargetPoseFigure` gains `character` (mannequin unchanged pixel-for-pixel, plus buddy/host/challenger), `DancingCharacter` animates reference poses (`src/pose/interpolate.ts`) or an idle groove
+- **Arena** (localStorage, `src/storage/arena.ts`): player name + host toggle in the difficulty modal, attempt log, previous attempt (read before recording), host score to beat, leaderboard; home screen rebranded "DanceCraft" with buddy hero + score-to-beat on cards
+- **Local host dance**: `npm run add-dance` (`scripts/add-local-dance.mjs`) imports a video into `public/dances/` + `manifest.json`, loaded by `src/storage/bundledDances.ts` even when the API server is down; `scripts/setup-windows.ps1`; `PYTHON_PATH` resolved at run time (fixes `.env` being ignored)
+
+### Integration fixes (2026-10-15)
+- DanceMode crashed ("Rendered fewer hooks than expected") when reference poses failed to load - hook moved above the early return; DanceMode and PracticeMode error screens now have a Back button and a clear message for dances without pose data
+- Coach plan / battle verdict cached per request so Replay -> back and Practice -> back don't re-ask Claude (and the plan doesn't change under the player)
+- Back from a coach drill returns to the results screen instead of home
+- The host re-dancing without ticking "I'm the host" is recorded as a host run (no more "Wasil vs Wasil" battle) - `isHostAttemptFor()`
+- `.env.example` no longer pins `CORS_ORIGIN` to :5173 (default allows any localhost port); imported videos in `public/dances/` are git-ignored
+- e2e heading assertions updated to "DanceCraft"; new `tests/e2e/dancecraft-coach.spec.ts`
+
+### Hero, clip, why-this-score, evidence-aware coach (2026-10-15, later)
+- Home hero with "Start the challenge" / Practice / + Add Dance, dancing Coach Buddy + host, score to beat + top 3, how-it-works strip ("+ Add Dance" moved from the header into the hero)
+- Results: "Your clip" card + side-by-side replay, "Why this score?" evidence block, out-of-frame parts greyed; per-video Mirror toggle in Practice and Replay
+- Coach request + arena attempts carry the honest-scoring evidence; Claude prompt, built-in coach and built-in battle announcer put framing/movement first and never judge an untracked body part
+- Verified: `npx tsc -b`, 524 unit tests, eslint (3 known DanceMode warnings), scratch production build, `dancecraft-coach.spec.ts` 2/2
+- Known: 19 older e2e tests (home-navigation, dynamic-library, dance-mode, dance-lifecycle, placeholder, practice-mode card button) expect a bundled "Sample Dance" / `.dance-card-delete` that no longer exist (the bundled list was already empty at HEAD 7aebdba); `visual-baseline` snapshots need regenerating. The backend restart is complete.
+
+### Verified
+- `npx tsc -b`, `npm run build`, 413 unit tests (27 files), eslint clean on all new/changed files
+- Server smoke test without an API key: status, plan (fallback, valid plan), 400 on invalid bodies, battle verdict
+- Playwright (fake webcam, mocked API): results screen with coach + battle + delta chip (exactly one coach and one battle request under StrictMode), drill-ready card in PracticeMode, back to results without re-asking, home screen with buddy + score to beat
+
+### Not verified yet (needs a real webcam / real key)
+- Real dancing -> scoring -> coach plan with a live Claude key; drill rep counting against a real reference video in the browser; visual baselines (`visual-baseline.spec.ts`) need regenerating after the rebrand
 
 ## Phase 0-5: (COMPLETE)
 
@@ -92,15 +136,17 @@ Three-layer defense against inflated scores (absent/still users getting "Perfect
 
 ## Known Bugs
 
-None currently tracked.
+- Visual regression baselines predate the DanceCraft rebrand and will fail until regenerated
+- Only one dancer is tracked at a time (MediaPipe `numPoses: 1`); spectators in frame can steal tracking
 
 ## Test Summary
 
-- Unit tests (Vitest) — all passing
+- Unit tests (Vitest) — 413 passing (27 files) as of 2026-10-15
 - 65+ e2e tests (Playwright) — all passing
 
 ## What's Next
 
+- DanceCraft: full rehearsal on the event laptop with a real webcam, the host's dance (`npm run add-dance`) and a real `ANTHROPIC_API_KEY`; regenerate visual baselines
 - Multi-person tracking (plan in docs/plans/multi-person-tracking.md)
 - History → replay (persist session data for later playback)
 - Threshold tuning based on playtesting

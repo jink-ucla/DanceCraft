@@ -28,6 +28,26 @@ export function saveDanceSettings(danceId: string, settings: DanceSettings): voi
   localStorage.setItem(STORAGE_KEY_PREFIX + danceId, JSON.stringify(settings))
 }
 
+/** Set just the mirror flag for one dance (keeps its other settings). */
+export function setDanceMirror(danceId: string, mirror: boolean): void {
+  saveDanceSettings(danceId, { ...loadDanceSettings(danceId), mirror })
+}
+
+// Mirror chosen in Add Dance before the dance exists: remembered per job and
+// applied to "api-<id>" once the job reports the created dance id.
+const PENDING_MIRROR_PREFIX = 'dancecraft_pending_mirror_'
+
+export function setPendingMirror(jobId: string, mirror: boolean): void {
+  localStorage.setItem(PENDING_MIRROR_PREFIX + jobId, mirror ? '1' : '0')
+}
+
+export function applyPendingMirror(jobId: string, apiDanceId: number | null | undefined): void {
+  const pending = localStorage.getItem(PENDING_MIRROR_PREFIX + jobId)
+  if (pending === null || apiDanceId === null || apiDanceId === undefined) return
+  setDanceMirror(`api-${apiDanceId}`, pending === '1')
+  localStorage.removeItem(PENDING_MIRROR_PREFIX + jobId)
+}
+
 export function extractYoutubeEmbedId(url: string): string | null {
   if (!url) return null
   const match = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)

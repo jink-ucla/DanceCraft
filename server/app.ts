@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import dancesRouter from './routes/dances.ts'
 import sessionsRouter from './routes/sessions.ts'
+import coachRouter from './routes/coach.ts'
 
 dotenv.config()
 
@@ -19,5 +20,6 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/dances', dancesRouter)
 app.use('/api/sessions', sessionsRouter)
+app.use('/api/coach', coachRouter)
 
 export default app

@@ -1,0 +1,100 @@
+/* ==========================================================================
+   DanceCraft replay — side-by-side layout, bigger "YOU" picture-in-picture.
+   Base replay styles live in App.css; every override here is scoped under
+   .replay-mode so it wins regardless of stylesheet order.
+   ========================================================================== */
+
+/* ---------- Split layout: reference | you, clear of header and controls ---------- */
+
+.replay-mode.replay-mode--split {
+  flex-direction: row;
+  gap: 10px;
+  padding: 58px 12px 128px;
+}
+
+.replay-mode--split .replay-pane {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  background: #05050a;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.replay-mode--split .replay-pane.replay-user-view {
+  border-color: rgba(0, 204, 255, 0.75);
+  box-shadow: 0 0 24px rgba(0, 204, 255, 0.18);
+}
+
+.replay-mode--split .replay-pip-label {
+  top: 10px;
+  left: 10px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-heading);
+}
+
+.replay-mode--split .replay-keypose-indicator {
+  top: 10px;
+  right: 10px;
+}
+
+/* Portrait / narrow windows: stack the panes */
+@media (max-aspect-ratio: 4 / 5) {
+  .replay-mode.replay-mode--split {
+    flex-direction: column;
+  }
+}
+
+/* ---------- PIP layout: a PIP you can actually see ---------- */
+
+.replay-mode--pip .replay-user-pip {
+  width: clamp(260px, 30vw, 460px);
+  bottom: 128px;
+}
+
+.replay-mode--pip .replay-user-pip.replay-user-view {
+  border-color: var(--blue);
+  box-shadow: 0 0 24px rgba(0, 204, 255, 0.25);
+}
+
+/* "YOU" label: high-contrast in both layouts */
+.replay-mode .replay-pip-label.replay-pip-label--you {
+  background: var(--blue);
+  color: #000;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+/* Recording missing / failed to load */
+.replay-user-missing {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  min-height: 120px;
+  background: rgba(0, 0, 0, 0.65);
+  color: var(--text);
+  font-size: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ---------- Controls: wrap instead of overflowing small windows ---------- */
+
+.replay-mode .replay-controls {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}

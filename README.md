@@ -1,4 +1,39 @@
-# Groovy
+# DanceCraft
+
+A webcam dance challenge where Claude turns your performance scores into a focused practice plan, so you can retry and beat the host.
+
+DanceCraft extends [Groovy by JoeyWangTW](https://github.com/JoeyWangTW/groovy), under the original MIT license. It adds a host challenge, a local leaderboard, a Claude coach, executable practice drills, and replay evidence. One dancer plays at a time; the leaderboard stays in the current browser.
+
+## DanceCraft demo
+
+1. Import a short reference video and choose its Mirror setting.
+2. Dance with the webcam. Review the score, tracking coverage, movement evidence, and your saved clip.
+3. Ask the coach for a section, playback speed, repetition count, and a cue. The Practice button applies that drill.
+4. Retry the full dance and compare with your previous attempt and the host.
+
+The motion engine calculates scores. The Anthropic API receives structured score summaries and tracking evidence, then returns a practice plan and battle commentary. Webcam video is not part of the Claude request. The app can store recordings on its own backend for session history.
+
+## Run locally
+
+Use Node.js 24, Python 3.11, FFmpeg, and yt-dlp. Install JavaScript dependencies with `npm install`, then follow [the DanceCraft setup and runbook](docs/dancecraft.md). On Windows, `scripts/setup-windows.ps1` prepares the Python environment; `start-dancecraft.cmd` launches the app. Copy `.env.example` to `.env` for local settings. Keep the API key on the Express backend.
+
+`npm run dev` starts the frontend and backend. For a production build on a different backend port, set `VITE_API_BASE` at build time, for example `http://localhost:3002`. The presentation laptop currently uses frontend port 5174 and backend port 3002.
+
+## Verified status on 2026 October 15
+
+The integrated app passes 524 unit tests, TypeScript checks, a production build, and the two coach browser tests. Changed files pass ESLint with existing DanceMode hook warnings; the full repository still has older lint errors and obsolete browser baselines.
+
+The post-dance scorer uses the held-out winner from the scoring experiment: body-segment directions, movement hits, bounded timing, visibility penalties, and reference video geometry. It passed 39 target checks and 28 rank checks on each of two previously unseen seeds. Those checks use synthetic variations of one reference and three existing still-person recordings. They do not establish human dance accuracy or fairness across dancers and camera viewpoints.
+
+The Claude API integration is implemented. The configured Anthropic account currently rejects live requests because its credit balance is too low. The UI labels the built-in coach when that fallback responds. A successful paid Claude call and a real-webcam rehearsal of the final build remain necessary before claiming an end-to-end live Claude demo.
+
+## Attribution
+
+Original dance engine: JoeyWangTW / Groovy, MIT. DanceCraft builds on its video import, MediaPipe tracking, key-pose feedback, recording/replay, and practice controls. Original copyright and license remain in [LICENSE](LICENSE). Local videos, recordings, credentials, virtual environments, and downloaded model files are excluded from this repository.
+
+---
+
+## Original Groovy documentation
 
 Open-source, browser-based dance game. Dance along to any YouTube video with real-time pose detection, scoring, and post-dance replay review. Think "Just Dance" but for any video, running entirely in the browser.
 

@@ -5,6 +5,9 @@ import { clearJobs } from '../../../server/jobs.ts'
 
 // Mock the processing module so tests don't actually run yt-dlp/ffmpeg
 vi.mock('../../../server/processing.ts', () => ({
+  parseClipRange: () => null,
+  processUploadJob: vi.fn(() => Promise.resolve()),
+  DATA_DIR: 'data/dances',
   isValidYoutubeUrl: (url: string) => {
     try {
       const parsed = new URL(url)

@@ -10,3 +10,8 @@ data/
 .venv/
 .DS_Store
 scripts/pose_landmarker_heavy.task
+# DanceCraft: local host-dance videos imported by `npm run add-dance` (large, personal)
+public/dances/*.mp4
+public/dances/*.mov
+public/dances/*.webm
+public/dances/*.m4v

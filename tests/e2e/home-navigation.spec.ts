@@ -4,7 +4,7 @@ import { goToHome, takeScreenshot, SAMPLE_API_DANCE } from './helpers'
 test.describe('Home screen and navigation', () => {
   test('home screen loads and shows dance library', async ({ page }) => {
     await goToHome(page)
-    await expect(page.locator('h1')).toHaveText('Groovy')
+    await expect(page.locator('h1')).toHaveText('DanceCraft')
     await expect(page.locator('.home-subtitle')).toBeVisible()
 
     // Bundled dances should appear
@@ -49,7 +49,7 @@ test.describe('Home screen and navigation', () => {
 
     // Back button works
     await page.locator('.settings-back-btn').click()
-    await expect(page.locator('h1')).toHaveText('Groovy')
+    await expect(page.locator('h1')).toHaveText('DanceCraft')
 
     await takeScreenshot(page, 'settings-page')
   })
@@ -67,7 +67,7 @@ test.describe('Home screen and navigation', () => {
 
     // Back button works
     await page.locator('.history-back-btn').click()
-    await expect(page.locator('h1')).toHaveText('Groovy')
+    await expect(page.locator('h1')).toHaveText('DanceCraft')
 
     await takeScreenshot(page, 'history-page')
   })

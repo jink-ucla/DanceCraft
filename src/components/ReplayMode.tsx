@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import {
   SKELETON_CONNECTIONS,
   KEYPOINT_RADIUS,
@@ -9,15 +9,20 @@ import type { TimestampedPose, SectionScore } from '../scoring/dtw'
 import { computePostDanceScore } from '../scoring/dtw'
 import { comparePoses } from '../scoring/comparison'
 import { TargetPoseFigure } from './TargetPoseFigure'
-import { loadDanceSettings } from '../storage/danceSettings'
+import { loadDanceSettings, setDanceMirror } from '../storage/danceSettings'
 import { detectKeyPoses } from '../scoring/keyPoseDetection'
 import type { KeyPose, PoseTimeline } from '../scoring/keyPoseDetection'
+import './Replay.css'
 
 interface ReplayModeProps {
   referenceVideoUrl?: string
   referencePoseUrl?: string
   danceId?: string
   userVideoUrl: string
+  /** Label on the user's video (default "YOU"; e.g. "PREVIEW CLIP" for a stand-in). */
+  userVideoLabel?: string
+  /** Show the user's recording selfie-style (default true: matches what they saw while dancing). */
+  mirrorUserVideo?: boolean
   userPosesUrl?: string // load poses from server (for history replay)
   userPoses: TimestampedPose[]
   sectionScores: SectionScore[]
@@ -210,11 +215,23 @@ function drawScoredSkeleton(
 
 const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2]
 
+/** 'split' = reference and you side by side (default); 'pip' = one big video + picture-in-picture. */
+type ReplayLayout = 'split' | 'pip'
+type VideoRole = 'main' | 'pip' | 'pane'
+
+const ROLE_CLASS: Record<VideoRole, string> = {
+  main: 'replay-main-video',
+  pip: 'replay-user-pip',
+  pane: 'replay-pane',
+}
+
 export function ReplayMode({
   referenceVideoUrl,
   referencePoseUrl,
   danceId,
   userVideoUrl,
+  userVideoLabel = 'YOU',
+  mirrorUserVideo = true,
   userPosesUrl,
   userPoses: initialUserPoses,
   sectionScores: initialSectionScores,
@@ -230,18 +247,36 @@ export function ReplayMode({
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [refDuration, setRefDuration] = useState(0)
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [keyPoses, setKeyPoses] = useState<KeyPose[]>([])
-  const [nearestKeyPose, setNearestKeyPose] = useState<KeyPose | null>(null)
+  // Key pose within 3s of the playhead (derived, not effect-synced state)
+  const nearestKeyPose = useMemo(() => {
+    let nearest: KeyPose | null = null
+    let nearestDist = Infinity
+    for (const kp of keyPoses) {
+      const dist = Math.abs(kp.timestamp - currentTime)
+      if (dist < nearestDist) {
+        nearest = kp
+        nearestDist = dist
+      }
+    }
+    return nearestDist < 3 ? nearest : null
+  }, [currentTime, keyPoses])
   const [userPoses, setUserPoses] = useState<TimestampedPose[]>(initialUserPoses)
   const [sectionScores, setSectionScores] = useState<SectionScore[]>(initialSectionScores)
   const [swapped, setSwapped] = useState(false)
+  const [layout, setLayout] = useState<ReplayLayout>('split')
   const [showUserSkeleton, setShowUserSkeleton] = useState(true)
   const [showRefSkeleton, setShowRefSkeleton] = useState(false)
   const [syncOffset, setSyncOffset] = useState(0)
   const [showScoring, setShowScoring] = useState(false)
   const [currentScoring, setCurrentScoring] = useState<ScoringState | null>(null)
-  const mirrorRef = danceId ? loadDanceSettings(danceId).mirror : false
+  const [failedUserVideoUrl, setFailedUserVideoUrl] = useState<string | null>(null)
+  const userVideoFailed = !userVideoUrl || failedUserVideoUrl === userVideoUrl
+  // Per-video mirror (same setting as the dance card / Add Dance); flips the
+  // reference video and its skeleton overlay live, no re-recording.
+  const [mirrorRef, setMirrorRef] = useState(() => (danceId ? loadDanceSettings(danceId).mirror : false))
   const syncCalibratedRef = useRef(false)
   const referencePosesRef = useRef<TimestampedPose[]>([])
 
@@ -354,21 +389,6 @@ export function ReplayMode({
       }
     }
   }, [userPoses, showUserSkeleton, showRefSkeleton, showScoring, syncOffset, nearestKeyPose])
-
-  // Update nearest key pose
-  useEffect(() => {
-    if (keyPoses.length === 0) { setNearestKeyPose(null); return }
-    let nearest: KeyPose | null = null
-    let nearestDist = Infinity
-    for (const kp of keyPoses) {
-      const dist = Math.abs(kp.timestamp - currentTime)
-      if (dist < nearestDist) {
-        nearest = kp
-        nearestDist = dist
-      }
-    }
-    setNearestKeyPose(nearestDist < 3 ? nearest : null)
-  }, [currentTime, keyPoses])
 
   // Render loop
   useEffect(() => {
@@ -484,8 +504,9 @@ export function ReplayMode({
         canvas.width = refVideo.videoWidth
         canvas.height = refVideo.videoHeight
       }
-      if (isFinite(refVideo.duration) && refVideo.duration > 0 && duration === 0) {
-        setDuration(refVideo.duration)
+      if (isFinite(refVideo.duration) && refVideo.duration > 0) {
+        setRefDuration(refVideo.duration)
+        if (duration === 0) setDuration(refVideo.duration)
       }
     }
   }, [duration])
@@ -563,14 +584,27 @@ export function ReplayMode({
     return () => userVideo.removeEventListener('ended', handleEnded)
   }, [])
 
-  const totalDuration = getTotalDuration()
+  // getTotalDuration from state (render must not read video refs): reference, then recording, then sections
+  const lastSectionEnd = sectionScores.length > 0 ? sectionScores[sectionScores.length - 1].endTime : 0
+  const totalDuration = refDuration > 0 ? refDuration : duration > 0 ? duration : lastSectionEnd
 
   const handleVideoClick = useCallback(() => {
     togglePlay()
   }, [togglePlay])
 
+  const toggleMirror = useCallback(() => {
+    const next = !mirrorRef
+    setMirrorRef(next)
+    if (danceId) setDanceMirror(danceId, next)
+  }, [mirrorRef, danceId])
+
+  // Split: both panes side by side (Swap exchanges sides). PIP: Swap exchanges main and PIP.
+  const refRole: VideoRole = layout === 'split' ? 'pane' : swapped ? 'pip' : 'main'
+  const userRole: VideoRole = layout === 'split' ? 'pane' : swapped ? 'main' : 'pip'
+  const paneOrder = (first: boolean) => (layout === 'split' ? { order: first ? 1 : 2 } : undefined)
+
   return (
-    <div className="replay-mode">
+    <div className={`replay-mode replay-mode--${layout}`}>
       {/* Session metadata */}
       <div className="replay-header">
         <button className="replay-back-btn" onClick={onBack}>Back</button>
@@ -588,16 +622,17 @@ export function ReplayMode({
 
       {/* Reference video + skeleton — always in DOM, CSS swaps position */}
       <div
-        className={swapped ? 'replay-user-pip' : 'replay-main-video'}
+        className={`${ROLE_CLASS[refRole]} replay-ref-view`}
+        style={paneOrder(!swapped)}
         onClick={handleVideoClick}
       >
-        {swapped && <div className="replay-pip-label">REF</div>}
+        {refRole !== 'main' && <div className="replay-pip-label">{refRole === 'pane' ? 'REFERENCE' : 'REF'}</div>}
         <div className="replay-video-wrapper">
           {referenceVideoUrl ? (
             <video
               ref={refVideoRef}
               src={referenceVideoUrl}
-              className={swapped ? 'replay-video-pip' : 'replay-video-full'}
+              className={refRole === 'pip' ? 'replay-video-pip' : 'replay-video-full'}
               playsInline
               muted
               preload="auto"
@@ -617,8 +652,8 @@ export function ReplayMode({
           />
         </div>
 
-        {/* Key pose indicator — only on main */}
-        {!swapped && nearestKeyPose && (
+        {/* Key pose indicator — on the main video (split: on the reference pane) */}
+        {refRole !== 'pip' && nearestKeyPose && (
           <div className="replay-keypose-indicator">
             <TargetPoseFigure pose={nearestKeyPose.pose} size={60} />
           </div>
@@ -627,31 +662,40 @@ export function ReplayMode({
 
       {/* User video + skeleton — always in DOM, CSS swaps position */}
       <div
-        className={swapped ? 'replay-main-video' : 'replay-user-pip'}
+        className={`${ROLE_CLASS[userRole]} replay-user-view`}
+        style={paneOrder(swapped)}
         onClick={handleVideoClick}
       >
-        {!swapped && <div className="replay-pip-label">YOU</div>}
+        {userRole !== 'main' && <div className="replay-pip-label replay-pip-label--you">{userVideoLabel}</div>}
         <div className="replay-video-wrapper">
           <video
             ref={userVideoRef}
-            src={userVideoUrl}
+            src={userVideoUrl || undefined}
             crossOrigin="anonymous"
-            className={swapped ? 'replay-video-full' : 'replay-video-pip'}
+            className={userRole === 'pip' ? 'replay-video-pip' : 'replay-video-full'}
             playsInline
             muted
             preload="auto"
             onLoadedMetadata={handleUserVideoLoaded}
-            style={{ transform: 'scaleX(-1)' }}
+            onError={() => setFailedUserVideoUrl(userVideoUrl)}
+            style={mirrorUserVideo ? { transform: 'scaleX(-1)' } : undefined}
           />
           <canvas
             ref={userCanvasRef}
             className="replay-pose-overlay"
-            style={{ transform: 'scaleX(-1)' }}
+            style={mirrorUserVideo ? { transform: 'scaleX(-1)' } : undefined}
           />
+          {userVideoFailed && (
+            <div className="replay-user-missing">
+              {userVideoUrl
+                ? 'Your recording could not be loaded.'
+                : 'No recording for this attempt.'}
+            </div>
+          )}
         </div>
 
         {/* Key pose indicator — only on main */}
-        {swapped && nearestKeyPose && (
+        {userRole === 'main' && nearestKeyPose && (
           <div className="replay-keypose-indicator">
             <TargetPoseFigure pose={nearestKeyPose.pose} size={60} />
           </div>
@@ -698,11 +742,27 @@ export function ReplayMode({
           {isPlaying ? 'Pause' : 'Play'}
         </button>
         <button
+          className={`replay-toggle-btn ${layout === 'split' ? 'active' : ''}`}
+          onClick={() => setLayout((l) => (l === 'split' ? 'pip' : 'split'))}
+          title="Show the reference and your recording side by side, or one big video with a picture-in-picture"
+          aria-pressed={layout === 'split'}
+        >
+          Side by side
+        </button>
+        <button
           className={`replay-toggle-btn ${swapped ? 'active' : ''}`}
           onClick={() => setSwapped((s) => !s)}
-          title="Swap main and PIP videos"
+          title={layout === 'split' ? 'Swap left and right videos' : 'Swap main and PIP videos'}
         >
           Swap
+        </button>
+        <button
+          className={`replay-toggle-btn replay-mirror-btn ${mirrorRef ? 'active' : ''}`}
+          onClick={toggleMirror}
+          title="Flip the reference video (and its skeleton) left-right. Saved for this dance."
+          aria-pressed={mirrorRef}
+        >
+          Mirror {mirrorRef ? 'ON' : 'OFF'}
         </button>
         <button
           className={`replay-toggle-btn ${showUserSkeleton ? 'active' : ''}`}

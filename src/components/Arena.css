@@ -1,0 +1,414 @@
+/* ========== DANCECRAFT ARENA ========== */
+/* Player setup (difficulty modal), leaderboard, home hero + player chip. */
+
+.arena-crown {
+  display: inline-block;
+  flex-shrink: 0;
+  color: var(--yellow);
+  filter: drop-shadow(0 0 4px rgba(255, 204, 0, 0.55));
+  vertical-align: -2px;
+}
+
+/* ---------- Player setup (inside .difficulty-modal) ---------- */
+
+.player-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 18px;
+  padding: 14px;
+  text-align: left;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.player-setup-challenge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--yellow);
+  background: rgba(255, 204, 0, 0.08);
+  border: 1px solid rgba(255, 204, 0, 0.3);
+  border-radius: var(--radius-sm);
+}
+
+.player-setup-challenge strong {
+  color: var(--text-heading);
+}
+
+.player-setup-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.player-setup-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-family: var(--font);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-heading);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.player-setup-input::placeholder {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.player-setup-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.player-setup-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.player-setup-host {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.player-setup-host input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--yellow);
+  cursor: pointer;
+}
+
+.player-setup-next {
+  margin-left: auto;
+  padding: 2px 0;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.player-setup-next:hover {
+  color: var(--accent);
+}
+
+/* ---------- Leaderboard ---------- */
+
+.arena-leaderboard {
+  width: 100%;
+  padding: 16px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.arena-leaderboard-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-heading);
+}
+
+.arena-leaderboard-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.arena-leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arena-leaderboard-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(60px, 34%) 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.arena-leaderboard-row-host {
+  border-color: rgba(255, 204, 0, 0.25);
+}
+
+.arena-leaderboard-row-me {
+  border-color: var(--accent);
+  background: linear-gradient(90deg, var(--accent-dim), var(--bg-elevated) 70%);
+  box-shadow: var(--shadow-glow);
+}
+
+.arena-lb-pos {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  border-radius: 50%;
+}
+
+.arena-lb-medal {
+  color: #1a1a1a;
+}
+
+.arena-lb-medal-gold {
+  background: radial-gradient(circle at 35% 30%, #fff3b0, #ffcc00 55%, #b8860b);
+  box-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+}
+
+.arena-lb-medal-silver {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #c0c7d1 55%, #7d8590);
+}
+
+.arena-lb-medal-bronze {
+  background: radial-gradient(circle at 35% 30%, #ffd3a8, #cd7f32 55%, #7a4a1d);
+}
+
+.arena-lb-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.arena-lb-name-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.arena-lb-you {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--bg-deep);
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+.arena-lb-bar {
+  height: 6px;
+  overflow: hidden;
+  background: var(--bg-deep);
+  border-radius: 3px;
+}
+
+.arena-lb-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--accent));
+  border-radius: 3px;
+}
+
+.arena-leaderboard-row-host .arena-lb-bar-fill {
+  background: linear-gradient(90deg, #ff9f1a, var(--yellow));
+}
+
+.arena-lb-score {
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.arena-leaderboard-row-host .arena-lb-score {
+  color: var(--yellow);
+}
+
+.arena-leaderboard-compact {
+  padding: 12px 14px;
+}
+
+.arena-leaderboard-compact .arena-leaderboard-row {
+  grid-template-columns: 24px minmax(0, 1fr) 44px;
+  padding: 5px 8px;
+}
+
+.arena-leaderboard-compact .arena-lb-pos {
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+}
+
+.arena-leaderboard-compact .arena-lb-name,
+.arena-leaderboard-compact .arena-lb-score {
+  font-size: 13px;
+}
+
+/* ---------- Home hero strip + player chip ---------- */
+
+.home-hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: -24px 0 32px;
+  padding: 14px 22px;
+  background:
+    radial-gradient(ellipse at 10% 50%, rgba(0, 255, 136, 0.12), transparent 60%),
+    radial-gradient(ellipse at 90% 50%, rgba(0, 204, 255, 0.1), transparent 60%),
+    var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.home-hero-character {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 110px;
+  min-height: 110px;
+}
+
+.home-hero-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.home-hero-tagline {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.home-hero-tagline strong {
+  color: var(--text-heading);
+}
+
+.home-player-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  box-shadow: var(--shadow-glow);
+}
+
+.home-player-chip strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--accent);
+}
+
+.home-player-chip-host {
+  border-color: var(--yellow);
+  box-shadow: 0 0 20px rgba(255, 204, 0, 0.15);
+}
+
+.home-player-chip-host strong {
+  color: var(--yellow);
+}
+
+.home-player-chip-empty {
+  border-style: dashed;
+  border-color: var(--border-hover);
+  box-shadow: none;
+}
+
+.home-player-chip-tag {
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--bg-deep);
+  background: var(--yellow);
+  border-radius: 4px;
+}
+
+/* ---------- Dance card "Score to beat" ---------- */
+
+.dance-card-to-beat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--yellow);
+  background: rgba(255, 204, 0, 0.1);
+  border-radius: 4px;
+}
+
+.dance-card-to-beat-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-heading);
+}
+
+/* ---------- Dev preview loading ---------- */
+
+.arena-preview-loading {
+  margin-top: 30vh;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+@media (max-width: 600px) {
+  .home-hero {
+    flex-direction: column;
+    text-align: center;
+    margin-top: -16px;
+  }
+
+  .home-hero-text {
+    align-items: center;
+  }
+}
