@@ -2,8 +2,11 @@ import type { Pose } from './types'
 import { comparePoses } from './comparison'
 
 export interface TimestampedPose {
+  /** Reference/music sample time. Legacy recordings without videoTime used recorder elapsed time. */
   time: number
   pose: Pose
+  /** Recorded frame time, in seconds. Absent in recordings made before clock mapping. */
+  videoTime?: number
 }
 
 export interface DTWResult {

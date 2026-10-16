@@ -8,6 +8,8 @@ playwright-report
 .env
 data/
 .venv/
+__pycache__/
+*.py[cod]
 .DS_Store
 scripts/pose_landmarker_heavy.task
 # DanceCraft: local host-dance videos imported by `npm run add-dance` (large, personal)

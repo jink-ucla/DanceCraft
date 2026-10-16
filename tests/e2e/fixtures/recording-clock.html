@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><title>Recording clock regression</title></head>
+<body><div id="root"></div><script type="module">
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+import { DanceMode } from '/src/components/DanceMode.tsx'
+import { ReplayMode } from '/src/components/ReplayMode.tsx'
+import '/src/App.css'
+import '/src/index.css'
+
+const root = createRoot(document.getElementById('root'))
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const harness = window.__clockHarness = { poses: [], sampledReferenceTimes: [], recording: null, finished: false }
+
+// A synthetic reference avoids any dependency on private recordings or network media.
+const referenceCanvas = document.createElement('canvas')
+referenceCanvas.width = 320; referenceCanvas.height = 240
+const referenceContext = referenceCanvas.getContext('2d')
+referenceContext.fillStyle = '#345678'; referenceContext.fillRect(0, 0, 320, 240)
+const referenceStream = referenceCanvas.captureStream(30)
+const referenceRecorder = new MediaRecorder(referenceStream, { mimeType: 'video/webm;codecs=vp8' })
+const referenceChunks = []
+referenceRecorder.ondataavailable = (event) => referenceChunks.push(event.data)
+const referenceDone = new Promise((resolve) => referenceRecorder.onstop = resolve)
+referenceRecorder.start()
+const referencePaint = setInterval(() => referenceContext.fillRect(0, 0, 320, 240), 33)
+await sleep(4000)
+referenceRecorder.stop()
+await referenceDone
+clearInterval(referencePaint)
+referenceStream.getTracks().forEach((track) => track.stop())
+const referenceUrl = URL.createObjectURL(new Blob(referenceChunks, { type: 'video/webm' }))
+
+// Encode a changing frame ID in pixels, so delayed inference cannot quietly
+// substitute a newer camera image in the saved video.
+const cameraCanvas = document.createElement('canvas')
+cameraCanvas.width = 320; cameraCanvas.height = 240
+const cameraContext = cameraCanvas.getContext('2d')
+const cameraStart = performance.now()
+function paintCamera() {
+  const frameId = Math.floor((performance.now() - cameraStart) / 100) % 100
+  cameraContext.fillStyle = '#000000'
+  cameraContext.fillRect(0, 0, 320, 240)
+  cameraContext.fillStyle = '#ffffff'
+  cameraContext.fillRect(frameId * 3, 0, 6, 240)
+}
+paintCamera()
+const cameraPaint = setInterval(paintCamera, 33)
+const cameraStream = cameraCanvas.captureStream(30)
+navigator.mediaDevices.getUserMedia = async () => cameraStream
+const poseUrl = URL.createObjectURL(new Blob([JSON.stringify({ fps: 30, duration: 4, keyframes: [] })], { type: 'application/json' }))
+
+harness.showReplay = (missingRecording = false) => root.render(React.createElement(ReplayMode, {
+  key: missingRecording ? 'missing' : 'full',
+  referenceVideoUrl: referenceUrl,
+  userVideoUrl: missingRecording ? '' : URL.createObjectURL(harness.recording),
+  userPoses: harness.poses,
+  sectionScores: [],
+  mirrorUserVideo: false,
+  sessionMeta: { date: '2026-10-16', score: 0, rank: 'C' },
+  onBack: () => {},
+}))
+root.render(React.createElement(DanceMode, {
+  referencePoseUrl: poseUrl,
+  referenceVideoUrl: referenceUrl,
+  customKeyPoses: [],
+  onRecordPose: (pose, time, videoTime) => harness.poses.push({ pose, time, videoTime }),
+  onRecordingComplete: (blob) => { harness.recording = blob },
+  onFinish: () => { harness.finished = true; clearInterval(cameraPaint) },
+}))
+</script></body></html>

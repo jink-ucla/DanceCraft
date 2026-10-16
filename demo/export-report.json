@@ -1,0 +1,128 @@
+{
+  "timingProvenance": "editorial estimate; original music clock was not recorded",
+  "legacyPoseOffsetSeconds": 0.4706,
+  "legacyMusicOffsetSeconds": 1.3,
+  "mapping": "videoPTS = referenceTime + musicOffset - poseOffset",
+  "performerTiming": "No dance-motion matching or score changes performed by this exporter",
+  "sourceCameraGeometry": [
+    320,
+    240
+  ],
+  "sourceReferenceGeometry": [
+    1280,
+    720
+  ],
+  "referenceClockStartSeconds": 0.0,
+  "referenceClockEndSeconds": 29.833333333333332,
+  "fps": 30,
+  "combinedFrames": 895,
+  "inputSha256": {
+    "userVideo": "a2898e99864afdd072b7818a23e69df3163580e72110770cc9095d519c04b0c3",
+    "userPoses": "b24dc204cd89e7aa2904a9ef81b11bfe7a9e76f531b936fb08e529e2ac6d57c3",
+    "referenceVideo": "629ce48e8cb3ba1cb0cd92bc5ff78f2eeac334a4d119044f38b08f707b25a721",
+    "referencePoses": "fbc52ca5127b6de9a7bde5aba0919d21567c4b6e96a20bce7481f8e02e1ccc4c"
+  },
+  "outputs": [
+    {
+      "file": "DanceCraft_01_Camera.mp4",
+      "bytes": 1851791,
+      "durationSeconds": 30.666667,
+      "audioVideoEndDifferenceSeconds": null,
+      "streams": [
+        {
+          "type": "video",
+          "codec": "h264"
+        }
+      ]
+    },
+    {
+      "file": "DanceCraft_02_Camera_Skeleton.mp4",
+      "bytes": 2411212,
+      "durationSeconds": 30.666667,
+      "audioVideoEndDifferenceSeconds": null,
+      "streams": [
+        {
+          "type": "video",
+          "codec": "h264"
+        }
+      ]
+    },
+    {
+      "file": "DanceCraft_03_Reference.mp4",
+      "bytes": 11405183,
+      "durationSeconds": 30.0,
+      "audioVideoEndDifferenceSeconds": 0.0,
+      "streams": [
+        {
+          "type": "video",
+          "codec": "h264"
+        },
+        {
+          "type": "audio",
+          "codec": "aac"
+        }
+      ]
+    },
+    {
+      "file": "DanceCraft_04_Synced_With_Audio.mp4",
+      "bytes": 13245893,
+      "durationSeconds": 29.833333,
+      "audioVideoEndDifferenceSeconds": 0.0,
+      "streams": [
+        {
+          "type": "video",
+          "codec": "h264"
+        },
+        {
+          "type": "audio",
+          "codec": "aac"
+        }
+      ]
+    },
+    {
+      "file": "DanceCraft_05_Reference_Skeleton.mp4",
+      "bytes": 16298597,
+      "durationSeconds": 30.0,
+      "audioVideoEndDifferenceSeconds": 0.0,
+      "streams": [
+        {
+          "type": "video",
+          "codec": "h264"
+        },
+        {
+          "type": "audio",
+          "codec": "aac"
+        }
+      ]
+    }
+  ],
+  "editorialAdjustmentBasis": {
+    "method": "Constant motion-cue alignment estimate, not recovered reference-clock metadata",
+    "windowOffsetsSeconds": [
+      1.3,
+      1.2833,
+      1.2833
+    ]
+  },
+  "soundtrackVerification": {
+    "audioReference": "Original reference video soundtrack",
+    "sampleRate": 8000,
+    "windows": [
+      {
+        "startSeconds": 0,
+        "offsetMilliseconds": 0.0,
+        "zeroLagCorrelation": 0.9982496096629169
+      },
+      {
+        "startSeconds": 10,
+        "offsetMilliseconds": 0.0,
+        "zeroLagCorrelation": 0.9988767711409775
+      },
+      {
+        "startSeconds": 23,
+        "offsetMilliseconds": 0.0,
+        "zeroLagCorrelation": 0.9985732628812299
+      }
+    ]
+  }
+}

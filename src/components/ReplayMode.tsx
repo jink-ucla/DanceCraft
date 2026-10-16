@@ -11,6 +11,7 @@ import { comparePoses } from '../scoring/comparison'
 import { TargetPoseFigure } from './TargetPoseFigure'
 import { loadDanceSettings, setDanceMirror } from '../storage/danceSettings'
 import { detectKeyPoses } from '../scoring/keyPoseDetection'
+import { recordingAnchors, referenceTimeAtVideoTime, videoTimeAtReferenceTime, needsPlaybackCorrection } from '../recording/timeline'
 import type { KeyPose, PoseTimeline } from '../scoring/keyPoseDetection'
 import './Replay.css'
 
@@ -270,6 +271,11 @@ export function ReplayMode({
   const [showUserSkeleton, setShowUserSkeleton] = useState(true)
   const [showRefSkeleton, setShowRefSkeleton] = useState(false)
   const [syncOffset, setSyncOffset] = useState(0)
+  const clockAnchors = useMemo(() => recordingAnchors(userPoses), [userPoses])
+  const videoPoses = useMemo(() => userPoses.map((sample) => ({
+    ...sample,
+    time: sample.videoTime ?? Math.max(0, sample.time - syncOffset),
+  })), [userPoses, syncOffset])
   const [showScoring, setShowScoring] = useState(false)
   const [currentScoring, setCurrentScoring] = useState<ScoringState | null>(null)
   const [failedUserVideoUrl, setFailedUserVideoUrl] = useState<string | null>(null)
@@ -347,7 +353,7 @@ export function ReplayMode({
       if (ctx) {
         ctx.clearRect(0, 0, userCanvas.width, userCanvas.height)
         if (showUserSkeleton || showScoring) {
-          const pose = findClosestPose(userPoses, userTime + syncOffset)
+          const pose = findClosestPose(videoPoses, userTime)
           if (pose) {
             // In scoring mode: color-code skeleton by per-joint score
             if (showScoring && nearestKeyPose) {
@@ -388,7 +394,7 @@ export function ReplayMode({
         }
       }
     }
-  }, [userPoses, showUserSkeleton, showRefSkeleton, showScoring, syncOffset, nearestKeyPose])
+  }, [videoPoses, showUserSkeleton, showRefSkeleton, showScoring, nearestKeyPose])
 
   // Render loop
   useEffect(() => {
@@ -397,18 +403,37 @@ export function ReplayMode({
     const tick = () => {
       const userVideo = userVideoRef.current
       const refVideo = refVideoRef.current
-      if (userVideo) {
+      if (userVideo && !userVideoFailed) {
         const uTime = userVideo.currentTime
-        const rTime = refVideo ? refVideo.currentTime : uTime
-        setCurrentTime(uTime)
+        // The recording is the playback master. Map it onto the music clock
+        // saved during capture; never erase genuine dancer lag by stretching it.
+        const rTime = referenceTimeAtVideoTime(clockAnchors, uTime, syncOffset)
+        if (refVideo && !refVideo.seeking) {
+          const target = Math.min(rTime, Number.isFinite(refVideo.duration) ? refVideo.duration : Infinity)
+          if (needsPlaybackCorrection(refVideo.currentTime, target)) refVideo.currentTime = target
+          // Both decoders can stall independently. Hold the soundtrack while
+          // the recording buffers, then resume instead of accumulating drift.
+          const nextReferenceTime = referenceTimeAtVideoTime(clockAnchors, uTime + 0.04, syncOffset)
+          const shouldPlay = !userVideo.paused && userVideo.readyState >= 3 && nextReferenceTime > rTime + 0.001
+          if (!shouldPlay) refVideo.pause()
+          else if (refVideo.paused && !refVideo.ended) refVideo.play().catch(() => {})
+        }
+        setCurrentTime(rTime)
         drawOverlays(uTime, rTime)
+      } else if (refVideo) {
+        // Sessions may have poses but no saved clip (recording is optional).
+        // Keep their reference playback usable rather than waiting on a video
+        // element with no source or a failed URL.
+        const rTime = refVideo.currentTime
+        setCurrentTime(rTime)
+        drawOverlays(videoTimeAtReferenceTime(clockAnchors, rTime, syncOffset), rTime)
       }
       animFrameRef.current = requestAnimationFrame(tick)
     }
 
     animFrameRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(animFrameRef.current)
-  }, [isPlaying, drawOverlays])
+  }, [isPlaying, drawOverlays, clockAnchors, syncOffset, userVideoFailed])
 
   /**
    * Scan the first second of the user video for the green sync marker (32x32 square
@@ -416,7 +441,10 @@ export function ReplayMode({
    * time so the skeleton aligns perfectly with the video content.
    */
   const calibrateSync = useCallback(async (video: HTMLVideoElement) => {
-    if (syncCalibratedRef.current || userPoses.length === 0) return
+    // New sessions have explicit clock anchors. A green corner is only a
+    // backwards-compatible estimate for legacy recordings, never a new offset.
+    if (syncCalibratedRef.current || userPoses.length === 0 || clockAnchors.length > 0) return
+    syncCalibratedRef.current = true
 
     const scanCanvas = document.createElement('canvas')
     scanCanvas.width = video.videoWidth || 320
@@ -460,8 +488,6 @@ export function ReplayMode({
       }
     }
 
-    syncCalibratedRef.current = true
-
     if (markerVideoTime >= 0) {
       // First pose time corresponds to the first marker frame
       const firstPoseTime = userPoses[0].time
@@ -471,7 +497,7 @@ export function ReplayMode({
 
     // Reset video to start
     video.currentTime = 0
-  }, [userPoses])
+  }, [userPoses, clockAnchors])
 
   // Re-run sync calibration when user poses arrive (history replay: poses load async after video)
   useEffect(() => {
@@ -514,23 +540,25 @@ export function ReplayMode({
   const togglePlay = useCallback(() => {
     const userVideo = userVideoRef.current
     const refVideo = refVideoRef.current
-    if (!userVideo) return
+    if (!userVideo && !refVideo) return
+    if (userVideoFailed && !refVideo) return
 
     if (isPlaying) {
-      userVideo.pause()
+      userVideo?.pause()
       refVideo?.pause()
       setIsPlaying(false)
     } else {
       // Unmute reference video for audio
       if (refVideo) {
+        if (!userVideoFailed && userVideo) refVideo.currentTime = referenceTimeAtVideoTime(clockAnchors, userVideo.currentTime, syncOffset)
         refVideo.muted = false
         refVideo.volume = 0.7
       }
-      userVideo.play().catch(() => {})
-      refVideo?.play().catch(() => {})
+      if (userVideoFailed) refVideo?.play().catch(() => {})
+      else userVideo?.play().catch(() => {})
       setIsPlaying(true)
     }
-  }, [isPlaying])
+  }, [isPlaying, clockAnchors, syncOffset, userVideoFailed])
 
   // Single source of truth for duration
   const getTotalDuration = useCallback((): number => {
@@ -547,15 +575,16 @@ export function ReplayMode({
     const clamped = Math.max(0, Math.min(time, totalDur || Infinity))
     const userVideo = userVideoRef.current
     const refVideo = refVideoRef.current
+    const userTime = videoTimeAtReferenceTime(clockAnchors, clamped, syncOffset)
     if (userVideo) {
-      userVideo.currentTime = clamped
+      userVideo.currentTime = Math.min(userTime, Number.isFinite(userVideo.duration) ? userVideo.duration : Infinity)
       setCurrentTime(clamped)
     }
     if (refVideo) {
       refVideo.currentTime = clamped
     }
-    drawOverlays(clamped, clamped)
-  }, [drawOverlays, getTotalDuration])
+    drawOverlays(userTime, clamped)
+  }, [drawOverlays, getTotalDuration, clockAnchors, syncOffset])
 
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -574,15 +603,16 @@ export function ReplayMode({
 
   // Handle video end
   useEffect(() => {
-    const userVideo = userVideoRef.current
-    if (!userVideo) return
+    const masterVideo = userVideoFailed ? refVideoRef.current : userVideoRef.current
+    if (!masterVideo) return
     const handleEnded = () => {
+      refVideoRef.current?.pause()
       setIsPlaying(false)
       cancelAnimationFrame(animFrameRef.current)
     }
-    userVideo.addEventListener('ended', handleEnded)
-    return () => userVideo.removeEventListener('ended', handleEnded)
-  }, [])
+    masterVideo.addEventListener('ended', handleEnded)
+    return () => masterVideo.removeEventListener('ended', handleEnded)
+  }, [userVideoFailed])
 
   // getTotalDuration from state (render must not read video refs): reference, then recording, then sections
   const lastSectionEnd = sectionScores.length > 0 ? sectionScores[sectionScores.length - 1].endTime : 0

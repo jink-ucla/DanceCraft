@@ -30,10 +30,10 @@ export async function initDetector(): Promise<PoseLandmarker> {
 }
 
 export async function estimatePose(
-  video: HTMLVideoElement
+  video: HTMLVideoElement | HTMLCanvasElement
 ): Promise<Pose | null> {
   if (!landmarker) return null
-  if (video.readyState < 2) return null
+  if ('readyState' in video && video.readyState < 2) return null
 
   // MediaPipe requires strictly increasing timestamps
   const timestamp = performance.now()
@@ -45,8 +45,8 @@ export async function estimatePose(
   if (!result.landmarks || result.landmarks.length === 0) return null
 
   const landmarks = result.landmarks[0]
-  const videoWidth = video.videoWidth || video.clientWidth
-  const videoHeight = video.videoHeight || video.clientHeight
+  const videoWidth = 'videoWidth' in video ? video.videoWidth || video.clientWidth : video.width
+  const videoHeight = 'videoHeight' in video ? video.videoHeight || video.clientHeight : video.height
 
   // All 33 MediaPipe landmarks, mapped 1:1 to our keypoint format
   const keypoints: Keypoint[] = landmarks.map((lm, i) => ({

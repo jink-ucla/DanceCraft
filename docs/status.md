@@ -6,6 +6,14 @@
 
 ## DanceCraft (2026-10-15)
 
+### Recording clocks and corrected promotional replay (2026-10-16)
+- Fixed capture startup and frame/pose identity; new pose entries store reference/music `time` and recorded `videoTime`, including empty detections. Replay follows the saved clocks and corrects decoder drift; no backend migration.
+- Verification: 531 unit tests, TypeScript and production build, the two coach browser tests, two real MediaRecorder browser regressions, and nine exporter timing/safety tests pass. Browser regressions include delayed inference, a reference stall, automatic/manual frame capture, frame identity, and reference-only playback.
+- Added `scripts/export_replay.py` with explicit legacy offsets, recorded-anchor mapping, VFR preservation, overlap trimming, input hash checks, and destination protection. Guide: `docs/video-sync.md`.
+- Replaced the promotional videos and slide 5 poster. Session 12 lacked the music clock, so its comparison uses a documented constant 1.30-second editorial estimate from motion cues. Original recordings, stored poses, and scores are unchanged; this is not a recovered historical playback clock.
+- Promoted the approved corrected clip to the main README with a poster and added Wasil's Instagram/LinkedIn and Jin's LinkedIn using the supplied URLs and team QR.
+- Updated the running preview at `http://localhost:5174` by publishing the verified static build without restarting the service. It serves `index-CdbGwg-d.js`; live homepage smoke check passed with three library cards and no page errors. A fresh physical-camera rehearsal is still required.
+
 ### README and original artwork (2026-10-16)
 - Replaced the inherited upstream README content and its screenshot with a DanceCraft introduction, original generated banner/feature art, current setup, and demo links.
 - Described the Claude Code rebuild in terms of the product experience and named the rebuilt modules; retained a concise Groovy credit and the original MIT license.

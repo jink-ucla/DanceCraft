@@ -6,6 +6,14 @@
 
 Most of the DanceCraft product experience was rebuilt and extended with **Claude Code**, including the challenge UI, coaching, practice drills, results, replay review, and calibrated post-dance scoring.
 
+## Watch the demo
+
+[![Watch the DanceCraft demo with both skeleton overlays and reference music](docs/images/dancecraft-demo-poster.png)](demo/DanceCraft_04_Synced_With_Audio.mp4)
+
+**[Watch or download the promotional replay](demo/DanceCraft_04_Synced_With_Audio.mp4)**
+
+A saved dance attempt beside the reference, with skeleton overlays and music. This legacy recording uses a fixed editorial timing adjustment; the original recording and scores are unchanged.
+
 ## The challenge
 
 Pick a short dance, follow it on your webcam, and chase the host's score. Review where you lost points, practice a section with the coach, then come back for a rematch.
@@ -15,7 +23,7 @@ Pick a short dance, follow it on your webcam, and chase the host's score. Review
 *Original AI-generated artwork for this README. The illustrations represent the experience; the app uses 2D characters.*
 
 1. **Dance.** Import a reference video, choose its Mirror setting, and follow along with webcam pose tracking and live key-pose feedback.
-2. **Review.** See section and body-part scores, tracking coverage, and a clear explanation of the result. Play your saved clip beside the reference at the same video timestamp.
+2. **Review.** See section and body-part scores, tracking coverage, and a clear explanation of the result. Replay aligns your saved clip with the reference using music and recording timestamps captured during the dance.
 3. **Practice.** Claude chooses a section, speed, repeat count, and concrete cue from the scoring evidence. The Practice button runs that drill.
 4. **Rematch.** Compare with your last attempt and challenge the host again. The local leaderboard keeps the score to beat visible.
 
@@ -40,7 +48,7 @@ API keys stay on the Express backend. Claude requests contain structured scores,
 
 ## Demo and presentation
 
-The saved demo shows a real recorded attempt with both skeleton overlays and synchronized reference music. It demonstrates performance review; it does not show a live Claude response.
+The saved demo shows a real recorded attempt with both skeleton overlays and reference music. This legacy clip uses a constant editorial timing adjustment; the raw recording and score data are unchanged. It demonstrates performance review rather than a live Claude response. See the [timing investigation and export guide](docs/video-sync.md).
 
 | Artifact | File |
 | --- | --- |
@@ -72,9 +80,14 @@ See the [setup and demo runbook](docs/dancecraft.md) for configuration and rehea
 
 React, TypeScript, and Vite power the UI. Express and SQLite manage the library and session history. MediaPipe tracks poses in the browser and extracts reference poses through Python; FFmpeg and yt-dlp handle video processing.
 
-The integrated app passes 524 unit tests, TypeScript checks, a production build, and two coach browser tests. The new post-dance scorer passed 39 target checks and 28 rank checks on each of two unseen seeds. Those checks use synthetic variations of one reference and three still-person recordings; they do not establish broad human dance accuracy or fairness.
+The integrated app passes 531 unit tests, TypeScript checks, a production build, two coach browser tests, and a recording-clock browser regression. The replay exporter also passes nine timing and destination-safety tests. The new post-dance scorer passed 39 target checks and 28 rank checks on each of two unseen seeds. Those checks use synthetic variations of one reference and three still-person recordings; they do not establish broad human dance accuracy or fairness.
 
 The app tracks one dancer at a time, and the leaderboard is local to the browser. Existing repository-wide lint issues and older visual test baselines remain. At the last verification, live Claude calls were blocked by insufficient API credits, so the local demo used the built-in coach. See [current status](docs/status.md) and the [scoring evaluation](docs/scoring-evaluation.md) for details.
+
+## Team
+
+- **M. Wasil Wahi-Anwar:** [Instagram](https://www.instagram.com/wasilwahi/) · [LinkedIn](https://www.linkedin.com/in/m-wasil-wahi-anwar-63027459/)
+- **Jin Kim:** [LinkedIn](https://www.linkedin.com/in/jin-kim-17551a107/)
 
 ## Credits
 

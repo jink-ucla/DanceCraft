@@ -615,8 +615,8 @@ function App() {
     setRecording(blob)
   }, [setRecording])
 
-  const handleRecordPose = useCallback((pose: Pose, time: number) => {
-    userPosesRef.current.push({ time, pose })
+  const handleRecordPose = useCallback((pose: Pose, time: number, videoTime?: number) => {
+    userPosesRef.current.push({ time, pose, ...(videoTime == null ? {} : { videoTime }) })
   }, [])
 
   const openDifficultyModal = (dance: DanceInfo) => {

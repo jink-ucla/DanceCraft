@@ -181,3 +181,11 @@
 - Removed the upstream README section and its screenshot from the main README; preserved a short Groovy/MIT credit and the original license.
 - Added two original images through the built-in image generation tool, labeled them as illustrations and saved the generation prompts alongside the assets.
 - Verified local README links and image files; no application code or live-server changes.
+
+## 2026-10-16 - Separate music and recording clocks and repair promotion export
+- Confirmed that VFR-to-30fps conversion preserved timestamps; independently re-extracted camera poses aligned within one frame. The large legacy performance/reference phase difference was approximately1.30seconds acrossthreewindows.
+- Fixed capture/replay clocks, inference frame identity, asynchronous startup and decoder drift. New poses retain music time plus videoTime; old recordings remain readable.
+- Added a guarded portable exporter and nine timing/safety tests. Re-exported the five promotional assets with a documented constant editorial offset for the legacy clip, natural overlap, retained soundtrack and unchanged source hashes.
+- Updated README timing notes and PPT demo poster. Kept original export backups outside the repo and all source recordings/pose/score data unchanged.
+- Validation: 531 unit tests, tsc and production build, coach browser2/2, clock browser2/2, Python exporter9/9. Published the build into the existing preview assets and verified the live homepage without service restart.
+- Promoted the user-approved corrected replay to the main README and added Wasil Instagram/LinkedIn and Jin LinkedIn profile links. No social-account posts or invitations were sent.
