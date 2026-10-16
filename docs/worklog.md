@@ -193,3 +193,8 @@
 ## 2026-10-16 - Simplify README presentation links
 - Removed the lower duplicate video table and its explanation, leaving a single pitch deck link in the Presentation section.
 - Retained the approved main promotional replay and its poster. Verified the presentation target exists and the documentation diff has no whitespace errors.
+
+## 2026-10-16 - Embed the main README replay as a GitHub video
+- Prepared a 5.35 MB H.264 upload copy while preserving the approved replay's audio packets, stream starts, and duration.
+- Uploaded it to the private DanceCraft repository through the official GitHub CLI attachment endpoint, without creating an issue or comment.
+- Replaced the top poster link with the returned standalone attachment URL; retained the original MP4 download link and the pitch-deck-only Presentation section.

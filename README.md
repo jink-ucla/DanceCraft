@@ -8,7 +8,7 @@ Most of the DanceCraft product experience was rebuilt and extended with **Claude
 
 ## Watch the demo
 
-[![Watch the DanceCraft demo with both skeleton overlays and reference music](docs/images/dancecraft-demo-poster.png)](demo/DanceCraft_04_Synced_With_Audio.mp4)
+https://github.com/user-attachments/assets/6c3ad56c-1a6f-4ed2-9b57-87eda692c578
 
 **[Watch or download the promotional replay](demo/DanceCraft_04_Synced_With_Audio.mp4)**
 
