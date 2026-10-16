@@ -1,0 +1,16 @@
+{
+  "mode": "built-in image_gen",
+  "purpose": "Original DanceCraft README illustrations",
+  "assets": [
+    {
+      "file": "dancecraft-hero.png",
+      "prompt": "Use case: ads-marketing.\nAsset type: original GitHub README banner for DanceCraft, wide landscape about 2.4:1.\nPrimary request: Create a polished, original illustration for our webcam dance challenge game. The visual should feel playful and credible for an open-source hackathon project.\nScene and style: near-black navy background, mint green and cyan light, restrained violet and gold accents. Clean premium stylized 3D clay illustration with simple friendly shapes and crisp typography.\nComposition: Large readable product name on the left, full-body dancing avatars on the right on a subtle small stage. The main avatar is a friendly dancer wearing a teal hoodie and over-ear headphones, arms lifted mid-dance. A smaller golden-shirt host avatar wears a small crown. Add a restrained glowing joint-tracking motif aligned to the dancer to suggest motion analysis.\nText exactly: \"DanceCraft\" and beneath it \"Dance. Practice. Rematch.\"\nConstraints: Original characters and artwork. No photographs, no celebrities, no borrowed product screenshots, no recognizable game characters, no Groovy imagery, no official Claude or Anthropic logo, no watermark. No fake app screenshot or fabricated interface. This is illustrative brand art. Readable typography with ample breathing room.",
+      "refinement": "Preserve the two original dancers, DanceCraft wordmark and Dance. Practice. Rematch. tagline. Remove other text, labels, extra robot and foreground clutter. Keep a clean navy stage."
+    },
+    {
+      "file": "dancecraft-flow.png",
+      "prompt": "Use case: infographic-diagram.\nAsset type: original wide GitHub README feature illustration for DanceCraft, landscape about 2.4:1.\nPrimary request: A coherent four-scene illustrated journey showing a person following a dance, reviewing movement, practicing a short loop, then challenging the host again.\nStyle: premium stylized 3D clay illustration, near-black navy backdrop, mint green and cyan with restrained violet and gold. Friendly teal-hoodie dancer wearing over-ear headphones throughout. Simple continuous composition with four clearly spaced scenes, not UI panels.\nScene 1: the avatar dances in front of a small webcam, full body visible with a subtle mint tracking skeleton.\nScene 2: the avatar studies two pose silhouettes side by side on a simple screen, highlighting an arm position.\nScene 3: the avatar repeats an arm movement beside a clear circular loop symbol and a small supportive abstract coaching sparkle.\nScene 4: the avatar and a gold-shirt host with a small crown perform a friendly dance challenge.\nText exactly and only these four labels: \"1 DANCE\", \"2 REVIEW\", \"3 PRACTICE\", \"4 REMATCH\".\nConstraints: No real people, photographs, recognizable existing characters, Groovy screenshots, official company logos, random metrics, numerical scores, fake product interfaces, additional text, watermark, or illegible microtext. Original illustrative feature art; characters and colors consistent across all four scenes."
+    }
+  ],
+  "disclosure": "Illustrative artwork. These images are not screenshots of the running application."
+}

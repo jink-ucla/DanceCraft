@@ -1,10 +1,15 @@
 # Project Status
 
-**Last updated:** 2026-10-15
+**Last updated:** 2026-10-16
 
 **Current state:** DanceCraft - AI Motion Arena integrated on top of Groovy (needs a live-webcam rehearsal before the event)
 
 ## DanceCraft (2026-10-15)
+
+### README and original artwork (2026-10-16)
+- Replaced the inherited upstream README content and its screenshot with a DanceCraft introduction, original generated banner/feature art, current setup, and demo links.
+- Described the Claude Code rebuild in terms of the product experience and named the rebuilt modules; retained a concise Groovy credit and the original MIT license.
+- Labeled the new artwork as illustrative and recorded the generation prompts in `docs/images/generation-prompts.json`. Application code and the running demo were unchanged.
 
 Host records a short dance, challengers dance it live, Claude reads the real scores and writes a practice plan that drives PracticeMode, then the challenger retries and battles the host's score. Runbook: `docs/dancecraft.md`.
 

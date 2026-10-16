@@ -175,3 +175,9 @@
 - Updated inbox.md with all CEO action items
 - Updated CLAUDE.md with new tech stack entries (backend, recording, visual regression)
 - Total stories: 12 complete (Phase 0) + 23 new = 35 total
+
+## 2026-10-16 - DanceCraft README and original brand artwork
+- Rewrote the main README around the Claude Code rebuild, the coached challenge, setup and the saved demo assets.
+- Removed the upstream README section and its screenshot from the main README; preserved a short Groovy/MIT credit and the original license.
+- Added two original images through the built-in image generation tool, labeled them as illustrations and saved the generation prompts alongside the assets.
+- Verified local README links and image files; no application code or live-server changes.
