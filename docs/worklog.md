@@ -198,3 +198,8 @@
 - Prepared a 5.35 MB H.264 upload copy while preserving the approved replay's audio packets, stream starts, and duration.
 - Uploaded it to the private DanceCraft repository through the official GitHub CLI attachment endpoint, without creating an issue or comment.
 - Replaced the top poster link with the returned standalone attachment URL; retained the original MP4 download link and the pitch-deck-only Presentation section.
+
+## 2026-10-16 - Clarify retry and rematch scope
+- Traced results retry and completed-drill retry callbacks, local previous-attempt lookup, host comparison, and leaderboard storage.
+- Confirmed existing tests cover comparison helpers and preview UI, but do not complete a second scored attempt through Retry.
+- Renamed the README's Rematch step to Retry and compare and labeled the artwork's intended experience. No app changes or new rematch feature were made; the complete live-camera loop remains unverified.

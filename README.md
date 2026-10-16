@@ -16,16 +16,16 @@ A saved dance attempt beside the reference, with skeleton overlays and music. Th
 
 ## The challenge
 
-Pick a short dance, follow it on your webcam, and chase the host's score. Review where you lost points, practice a section with the coach, then come back for a rematch.
+Pick a short dance, follow it on your webcam, and chase the host's score. Review where you lost points, practice a section with the coach, then retry and compare your scores.
 
-![Illustrated DanceCraft journey showing Dance, Review, Practice, and Rematch](docs/images/dancecraft-flow.png)
+![Concept illustration of the DanceCraft practice loop](docs/images/dancecraft-flow.png)
 
-*Original AI-generated artwork for this README. The illustrations represent the experience; the app uses 2D characters.*
+*Original AI-generated concept artwork for this README. The illustrated "Rematch" step represents the intended experience; the current app provides local retries and score comparisons with 2D characters.*
 
 1. **Dance.** Import a reference video, choose its Mirror setting, and follow along with webcam pose tracking and live key-pose feedback.
 2. **Review.** See section and body-part scores, tracking coverage, and a clear explanation of the result. Replay aligns your saved clip with the reference using music and recording timestamps captured during the dance.
 3. **Practice.** Claude chooses a section, speed, repeat count, and concrete cue from the scoring evidence. The Practice button runs that drill.
-4. **Rematch.** Compare with your last attempt and challenge the host again. The local leaderboard keeps the score to beat visible.
+4. **Retry and compare.** "Try Again" restarts the dance; "Try Full Dance" returns from a completed coach drill. Results can compare with your previous attempt and a saved host score in the same browser. This full two-attempt flow still needs a live-webcam rehearsal.
 
 ## Rebuilt with Claude Code
 

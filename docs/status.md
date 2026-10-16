@@ -15,6 +15,7 @@
 - Updated the running preview at `http://localhost:5174` by publishing the verified static build without restarting the service. It serves `index-CdbGwg-d.js`; live homepage smoke check passed with three library cards and no page errors. A fresh physical-camera rehearsal is still required.
 
 ### README and original artwork (2026-10-16)
+- Audited the README's rematch claim: local retry callbacks, previous-attempt comparison, and host-score comparison are wired, but no complete two-attempt dance/practice/retry test or live-webcam rehearsal verifies that loop. Renamed the step "Retry and compare" and clarified the concept artwork; there is no online party/rematch implementation.
 - Uploaded the approved replay as a GitHub video attachment and replaced the top poster link with its standalone URL for an inline player. The upload copy is 5.35 MB; audio packets, stream starts, and duration match the approved promotional replay.
 - Simplified the lower presentation section to the pitch deck link only; retained the approved promotional replay at the top of the README.
 - Replaced the inherited upstream README content and its screenshot with a DanceCraft introduction, original generated banner/feature art, current setup, and demo links.
