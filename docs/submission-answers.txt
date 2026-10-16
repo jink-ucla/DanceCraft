@@ -1,0 +1,23 @@
+What's your project called?
+DanceCraft
+
+One-liner
+A webcam dance challenge where Claude turns your performance scores into a focused practice plan, so you can retry and beat the host.
+
+Live demo URL
+Leave blank for now. The local demo is http://localhost:5174 and is not a public URL.
+
+GitHub repo
+https://github.com/jink-ucla/DanceCraft
+Keep the repository private for Wasil and Jin to review. Since the form requires a public repository and this field is optional, leave the form field blank for now.
+
+Demo video
+demo/DanceCraft_04_Synced_With_Audio.mp4
+Upload the file to your chosen video host, then paste its URL. This is a saved performance comparison with skeletons and reference music. It does not show the Claude coaching flow.
+
+Add teammates
+Name: M. Wasil Wahi-Anwar
+Email: not provided
+
+Current Claude status
+The backend has credentials and the integration is implemented. Live inference is blocked by insufficient Anthropic credits; the app currently uses its labeled built-in coach.
