@@ -20,7 +20,7 @@ No API key? The coach falls back to a deterministic **built-in coach**, so the e
 
 ## Setup
 
-Requirements: Node 20+, Chrome or Edge, a webcam, and (only for importing dances) Python **3.11 or 3.12**.
+Requirements: Node 20, 22, or 24 (Node 25+ cannot build `better-sqlite3`; see `.nvmrc`), Chrome or Edge, a webcam, and (only for importing dances) Python **3.11 or 3.12**.
 ffmpeg and yt-dlp are optional (YouTube imports and thumbnails).
 
 ### Windows
@@ -43,7 +43,7 @@ Missing tools: `winget install OpenJS.NodeJS.LTS`, `winget install Python.Python
 ```bash
 npm install
 python3.12 -m venv .venv            # or python3.11
-.venv/bin/python3 -m pip install mediapipe opencv-python-headless numpy yt-dlp
+.venv/bin/python3 -m pip install -r scripts/requirements.txt
 curl -L -o scripts/pose_landmarker_heavy.task \
   https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task
 cp .env.example .env                # then add ANTHROPIC_API_KEY (see below)

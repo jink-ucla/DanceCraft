@@ -6,6 +6,9 @@
 
 ## DanceCraft (2026-10-15)
 
+### Setup fixes (2026-10-16)
+- Node is pinned to 20/22/24 (`engines` + `engine-strict` + `.nvmrc` 22) because `better-sqlite3` 12.8 does not install on Node 26. `scripts/requirements.txt` now lists mediapipe (not tensorflow). README has macOS/Linux setup steps. Verified on macOS with Node 22 and Python 3.11: install, 531 unit tests, build, dev servers. Next: upgrading to `better-sqlite3` 13 (Node >=22) could allow Node 26; `npm audit` reports 23 vulnerabilities.
+
 ### Recording clocks and corrected promotional replay (2026-10-16)
 - Fixed capture startup and frame/pose identity; new pose entries store reference/music `time` and recorded `videoTime`, including empty detections. Replay follows the saved clocks and corrects decoder drift; no backend migration.
 - Verification: 531 unit tests, TypeScript and production build, the two coach browser tests, two real MediaRecorder browser regressions, and nine exporter timing/safety tests pass. Browser regressions include delayed inference, a reference stall, automatic/manual frame capture, frame identity, and reference-only playback.

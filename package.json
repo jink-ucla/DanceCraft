@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": "^20 || ^22 || ^24"
+  },
   "scripts": {
     "dev": "concurrently -n frontend,backend -c cyan,magenta \"vite\" \"tsx watch server/index.ts\"",
     "dev:frontend": "vite",

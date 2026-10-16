@@ -52,7 +52,9 @@ API keys stay on the Express backend. Claude requests contain structured scores,
 
 ## Run locally
 
-Prerequisites: Node.js 24, Python 3.11, and FFmpeg. The Windows setup script installs the project dependencies, creates the Python environment, installs yt-dlp, and downloads the pose model.
+Prerequisites: Node.js 20, 22, or 24 (Node 25+ cannot build `better-sqlite3`, so `npm install` stops with an engine error), Python 3.11 or 3.12 (mediapipe has no wheels for 3.13+), and FFmpeg.
+
+On Windows, the setup script installs the project dependencies, creates the Python environment, installs yt-dlp, and downloads the pose model.
 
 ```powershell
 git clone https://github.com/jink-ucla/DanceCraft.git
@@ -60,6 +62,22 @@ cd DanceCraft
 powershell -ExecutionPolicy Bypass -File scripts/setup-windows.ps1
 .\start-dancecraft.cmd
 ```
+
+On macOS or Linux (with FFmpeg installed, e.g. `brew install ffmpeg`):
+
+```bash
+git clone https://github.com/jink-ucla/DanceCraft.git
+cd DanceCraft
+npm install
+python3.11 -m venv .venv            # or python3.12
+.venv/bin/python3 -m pip install -r scripts/requirements.txt
+curl -L -o scripts/pose_landmarker_heavy.task \
+  https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task
+cp .env.example .env
+npm run dev                         # open http://localhost:5173
+```
+
+If your default Node is too new, use the version in `.nvmrc` (`nvm use`), or with Homebrew `brew install node@22` and put `$(brew --prefix node@22)/bin` first on your `PATH`.
 
 For Claude coaching, set `ANTHROPIC_API_KEY` in your local `.env` and use an available `COACH_MODEL`. The backend reads the key. The built-in coach works without a key.
 

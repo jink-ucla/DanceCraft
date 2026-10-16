@@ -1,31 +1,38 @@
 # Offline Pose Extraction Pipeline
 
-Extracts pose data from YouTube dance videos using MoveNet Lightning.
+Extracts pose data from YouTube dance videos or local video files using MediaPipe BlazePose Heavy, with outlier rejection, interpolation, and smoothing.
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11 or 3.12 (mediapipe has no wheels for 3.13+)
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) installed and available on PATH
 - ffmpeg installed (for yt-dlp video merging)
 
 ## Setup
 
+From the repo root:
+
 ```bash
-cd scripts
-pip install -r requirements.txt
+python3.11 -m venv .venv
+.venv/bin/python3 -m pip install -r scripts/requirements.txt
+curl -L -o scripts/pose_landmarker_heavy.task \
+  https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task
 ```
+
+On Windows, `scripts/setup-windows.ps1` does all of this.
 
 ## Usage
 
 ```bash
-python scripts/extract_poses.py <youtube-url> [--output poses.json] [--max-duration 300]
+python scripts/extract_poses.py <youtube-url-or-file> [--output poses.json] [--max-fps 30] [--max-duration 0]
 ```
 
 ### Arguments
 
-- `url` — YouTube video URL (required)
+- `url` — YouTube video URL or local video file path (required)
 - `--output`, `-o` — Output JSON file path (default: `poses.json`)
-- `--max-duration` — Maximum video duration in seconds (default: 300 = 5 minutes)
+- `--max-fps` — Analyse at most this many frames per second; 0 = every frame (default: 30)
+- `--max-duration` — URLs only: skip videos longer than this many seconds; 0 = no limit (default: 0)
 
 ### Example
 
@@ -51,7 +58,7 @@ python scripts/extract_poses.py "https://www.youtube.com/watch?v=EXAMPLE" -o pub
 }
 ```
 
-Each keyframe contains 17 MoveNet keypoints with normalized `x`, `y` coordinates (0-1 range) and a confidence `score`.
+Each keyframe contains all 33 BlazePose landmarks with normalized `x`, `y` coordinates (0-1 range) and a confidence `score`.
 
 ## Tests
 

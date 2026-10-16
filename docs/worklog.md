@@ -208,3 +208,10 @@
 - Used the built-in image generator to replace both illustrations with matching Dance, Review, and Practice artwork.
 - Corrected the banner tagline, removed the fourth scene and crowned rival, and visually checked the three remaining step labels.
 - Saved versioned image assets in docs/images, updated README links and the illustrative-art caption, and recorded the exact generation prompts. Application code and the main video were unchanged.
+
+## 2026-10-16 - macOS setup check and Node/Python dependency fixes
+- Set up a fresh macOS checkout: `npm install` failed on Node 26 (`better-sqlite3` 12.8 supports Node 20-25 and had no prebuilt binary; the source build hit missing C++ headers). Node 22 installed cleanly; 531 unit tests and the production build pass; dev frontend (5173) and backend (3001) both answered.
+- Added `"engines": {"node": "^20 || ^22 || ^24"}`, `.npmrc` with `engine-strict=true` (Node 26 now fails immediately with EBADENGINE), and `.nvmrc` (22).
+- Replaced the stale `scripts/requirements.txt` (tensorflow/tensorflow-hub, no mediapipe) with what `extract_poses.py` imports: mediapipe, opencv-python-headless, numpy, yt-dlp. Verified it resolves in a Python 3.11 venv.
+- README: Node/Python version limits and macOS/Linux setup steps. Runbook: Node range and `pip install -r`. `scripts/README.md`: MediaPipe instead of MoveNet, venv/model setup, current CLI flags, 33 landmarks.
+- Not run: Playwright e2e tests and a live-webcam dance.
