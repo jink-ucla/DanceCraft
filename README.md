@@ -6,6 +6,10 @@
 
 Most of the DanceCraft product experience was rebuilt and extended with **Claude Code**, including the challenge UI, coaching, practice drills, results, replay review, and calibrated post-dance scoring.
 
+
+****To the Claude Creator Summit Hackathon organizers:** Our demo video was blocked on YouTube because of copyrighted content (i.e. the K-POP video we used), so please find the finalized hackathon demo video here: [https://drive.google.com/file/d/14C6geNOzlsCMKRslBM4c-mJGKP2mHCjX/view?usp=drive_link](https://drive.google.com/file/d/14C6geNOzlsCMKRslBM4c-mJGKP2mHCjX/view?usp=drive_link)
+
+
 ## Watch the demo
 
 https://github.com/user-attachments/assets/6c3ad56c-1a6f-4ed2-9b57-87eda692c578
