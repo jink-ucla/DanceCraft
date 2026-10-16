@@ -203,3 +203,8 @@
 - Traced results retry and completed-drill retry callbacks, local previous-attempt lookup, host comparison, and leaderboard storage.
 - Confirmed existing tests cover comparison helpers and preview UI, but do not complete a second scored attempt through Retry.
 - Renamed the README's Rematch step to Retry and compare and labeled the artwork's intended experience. No app changes or new rematch feature were made; the complete live-camera loop remains unverified.
+
+## 2026-10-16 - Regenerate README illustrations without rematch claims
+- Used the built-in image generator to replace both illustrations with matching Dance, Review, and Practice artwork.
+- Corrected the banner tagline, removed the fourth scene and crowned rival, and visually checked the three remaining step labels.
+- Saved versioned image assets in docs/images, updated README links and the illustrative-art caption, and recorded the exact generation prompts. Application code and the main video were unchanged.

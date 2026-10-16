@@ -1,6 +1,6 @@
 # DanceCraft
 
-![DanceCraft illustrated banner with a dancer and a crowned host](docs/images/dancecraft-hero.png)
+![DanceCraft illustrated banner: Dance. Review. Practice.](docs/images/dancecraft-hero-v2.png)
 
 **A webcam dance challenge where Claude turns your scores into a focused practice plan, so you can retry and beat the host.**
 
@@ -18,9 +18,9 @@ A saved dance attempt beside the reference, with skeleton overlays and music. Th
 
 Pick a short dance, follow it on your webcam, and chase the host's score. Review where you lost points, practice a section with the coach, then retry and compare your scores.
 
-![Concept illustration of the DanceCraft practice loop](docs/images/dancecraft-flow.png)
+![Concept illustration of dancing, replay review, and focused practice in DanceCraft](docs/images/dancecraft-flow-v2.png)
 
-*Original AI-generated concept artwork for this README. The illustrated "Rematch" step represents the intended experience; the current app provides local retries and score comparisons with 2D characters.*
+*Original AI-generated concept artwork for this README. The app uses 2D characters.*
 
 1. **Dance.** Import a reference video, choose its Mirror setting, and follow along with webcam pose tracking and live key-pose feedback.
 2. **Review.** See section and body-part scores, tracking coverage, and a clear explanation of the result. Replay aligns your saved clip with the reference using music and recording timestamps captured during the dance.
