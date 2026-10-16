@@ -189,3 +189,7 @@
 - Updated README timing notes and PPT demo poster. Kept original export backups outside the repo and all source recordings/pose/score data unchanged.
 - Validation: 531 unit tests, tsc and production build, coach browser2/2, clock browser2/2, Python exporter9/9. Published the build into the existing preview assets and verified the live homepage without service restart.
 - Promoted the user-approved corrected replay to the main README and added Wasil Instagram/LinkedIn and Jin LinkedIn profile links. No social-account posts or invitations were sent.
+
+## 2026-10-16 - Simplify README presentation links
+- Removed the lower duplicate video table and its explanation, leaving a single pitch deck link in the Presentation section.
+- Retained the approved main promotional replay and its poster. Verified the presentation target exists and the documentation diff has no whitespace errors.

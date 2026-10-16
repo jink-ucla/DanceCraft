@@ -15,6 +15,7 @@
 - Updated the running preview at `http://localhost:5174` by publishing the verified static build without restarting the service. It serves `index-CdbGwg-d.js`; live homepage smoke check passed with three library cards and no page errors. A fresh physical-camera rehearsal is still required.
 
 ### README and original artwork (2026-10-16)
+- Simplified the lower presentation section to the pitch deck link only; retained the approved promotional replay at the top of the README.
 - Replaced the inherited upstream README content and its screenshot with a DanceCraft introduction, original generated banner/feature art, current setup, and demo links.
 - Described the Claude Code rebuild in terms of the product experience and named the rebuilt modules; retained a concise Groovy credit and the original MIT license.
 - Labeled the new artwork as illustrative and recorded the generation prompts in `docs/images/generation-prompts.json`. Application code and the running demo were unchanged.

@@ -46,18 +46,9 @@ The coach addresses low movement and poor framing before technique advice and av
 
 API keys stay on the Express backend. Claude requests contain structured scores, not webcam video. Recordings can be stored by the app's own backend for History and replay. A labeled built-in coach handles missing credentials or failed API requests.
 
-## Demo and presentation
+## Presentation
 
-The saved demo shows a real recorded attempt with both skeleton overlays and reference music. This legacy clip uses a constant editorial timing adjustment; the raw recording and score data are unchanged. It demonstrates performance review rather than a live Claude response. See the [timing investigation and export guide](docs/video-sync.md).
-
-| Artifact | File |
-| --- | --- |
-| Synced replay with skeletons and music | [Watch or download](demo/DanceCraft_04_Synced_With_Audio.mp4) |
-| Camera recording | [Video](demo/DanceCraft_01_Camera.mp4) |
-| Camera with skeleton | [Video](demo/DanceCraft_02_Camera_Skeleton.mp4) |
-| Reference with music | [Video](demo/DanceCraft_03_Reference.mp4) |
-| Reference with skeleton and music | [Video](demo/DanceCraft_05_Reference_Skeleton.mp4) |
-| Three-minute pitch | [PowerPoint](docs/presentation/DanceCraft_Final_Presentation.pptx) |
+[Download the three-minute pitch deck](docs/presentation/DanceCraft_Final_Presentation.pptx)
 
 ## Run locally
 
