@@ -8,6 +8,7 @@ import {
   getPreviousAttempt,
   getLeaderboard,
   getHostForDance,
+  getPlayerProgress,
   isHostAttemptFor,
   normalizePlayerName,
   resolvePlayerName,
@@ -260,6 +261,27 @@ describe('arena storage', () => {
       recordArenaAttempt(makeEntry({ player: 'Wasil', score: 0.99, isHost: true, danceId: 'dance-b' }))
       expect(getHostForDance('dance-a')).toEqual({ name: 'Wasil', score: 0.78 })
       expect(getHostForDance('dance-b')).toEqual({ name: 'Wasil', score: 0.99 })
+    })
+  })
+
+  describe('getPlayerProgress', () => {
+    it('returns null when the player has no runs on that dance', () => {
+      recordArenaAttempt(makeEntry({ player: 'Bob', score: 0.7 }))
+      recordArenaAttempt(makeEntry({ player: 'Alice', score: 0.7, danceId: 'dance-b' }))
+      expect(getPlayerProgress('dance-a', 'Alice')).toBeNull()
+    })
+
+    it('has no previous run after a single run', () => {
+      recordArenaAttempt(makeEntry({ player: 'Alice', score: 0.55 }))
+      expect(getPlayerProgress('dance-a', 'Alice')).toEqual({ runs: 1, best: 0.55, last: 0.55, previous: null })
+    })
+
+    it('reports best, last and previous runs, matching names case-insensitively', () => {
+      recordArenaAttempt(makeEntry({ player: 'Alice', score: 0.5 }))
+      recordArenaAttempt(makeEntry({ player: 'alice', score: 0.8 }))
+      recordArenaAttempt(makeEntry({ player: 'Bob', score: 0.9 }))
+      recordArenaAttempt(makeEntry({ player: ' ALICE ', score: 0.71 }))
+      expect(getPlayerProgress('dance-a', 'Alice')).toEqual({ runs: 3, best: 0.8, last: 0.71, previous: 0.8 })
     })
   })
 

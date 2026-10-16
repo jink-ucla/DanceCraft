@@ -215,3 +215,9 @@
 - Replaced the stale `scripts/requirements.txt` (tensorflow/tensorflow-hub, no mediapipe) with what `extract_poses.py` imports: mediapipe, opencv-python-headless, numpy, yt-dlp. Verified it resolves in a Python 3.11 venv.
 - README: Node/Python version limits and macOS/Linux setup steps. Runbook: Node range and `pip install -r`. `scripts/README.md`: MediaPipe instead of MoveNet, venv/model setup, current CLI flags, 33 landmarks.
 - Not run: Playwright e2e tests and a live-webcam dance.
+
+## 2026-10-16 - Landing page: practice-first copy (branch landing-page-studio, trial)
+- Hero copy keeps "AI Motion Arena" but drops the battle framing: eyebrow "your own dance studio, with an AI coach", headline "Come back better.", "Start dancing" CTA, step 3 "Retry and see your progress" with a trend icon.
+- Scoreboard: "Your best" with the change since the previous run, plus a "Benchmarks" list (your last run, host's or top score). Removed Top 3 and the crown icons from the hero tags.
+- Added `getPlayerProgress()` to arena storage with 3 unit tests; updated the home e2e test and added a returning-player e2e test.
+- Verified: tsc, eslint on changed files, 534 unit tests, `dancecraft-coach.spec.ts` 3/3, screenshots reviewed. Not changed: host avatar's crown art, dance-card "to beat" line, results-screen battle panel.

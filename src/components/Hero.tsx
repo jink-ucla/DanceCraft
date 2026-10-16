@@ -1,8 +1,7 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { CSSProperties } from 'react'
 import { DancingCharacter } from './DancingCharacter'
-import { CrownIcon } from './Leaderboard'
-import { getHostForDance, getLeaderboard, isSamePlayer } from '../storage/arena'
+import { getHostForDance, getLeaderboard, getPlayerProgress, isSamePlayer } from '../storage/arena'
 import type { ArenaPlayer } from '../storage/arena'
 import type { DanceInfo } from './HomeScreen'
 import './Hero.css'
@@ -17,9 +16,9 @@ interface HeroProps {
 }
 
 const STEPS = [
-  { title: 'Dance with your webcam', text: 'Copy the host’s routine, full body in frame.', icon: 'cam' },
+  { title: 'Dance with your webcam', text: 'Follow the routine, full body in frame.', icon: 'cam' },
   { title: 'Claude finds your weakest moves', text: 'and builds a focused drill just for them.', icon: 'spark' },
-  { title: 'Retry and beat the host’s score', text: 'Climb the leaderboard and take the crown.', icon: 'trophy' },
+  { title: 'Retry and see your progress', text: 'Compare each run with your last one.', icon: 'trend' },
 ] as const
 
 type StepIcon = (typeof STEPS)[number]['icon']
@@ -74,12 +73,11 @@ function Icon({ name }: { name: StepIcon | 'play' }) {
           <path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z" />
         </svg>
       )
-    case 'trophy':
+    case 'trend':
       return (
         <svg {...common}>
-          <path d="M8 4h8v5a4 4 0 0 1-8 0V4z" />
-          <path d="M8 6H4.5a3.5 3.5 0 0 0 3.8 4M16 6h3.5a3.5 3.5 0 0 1-3.8 4" />
-          <path d="M12 13v4M8.5 20h7M9.5 17h5" />
+          <path d="M3 17l6-6 4 4 8-8" />
+          <path d="M15 7h6v6" />
         </svg>
       )
   }
@@ -88,7 +86,8 @@ function Icon({ name }: { name: StepIcon | 'play' }) {
 /**
  * Home-screen hero: headline + CTAs on the left, the coach (and host)
  * dancing the first ready dance on a spotlit stage on the right, the
- * "score to beat" with a mini top-3, and a 3-step "how it works" strip.
+ * player's own best/progress with the host's score as a benchmark, and a
+ * 3-step "how it works" strip.
  */
 export function Hero({ dances, loading = false, currentPlayer = null, onSelectDance, onPracticeDance, onAddDance }: HeroProps) {
   const firstDance = useMemo(() => dances.find((d) => !d.processing) ?? null, [dances])
@@ -102,13 +101,25 @@ export function Hero({ dances, loading = false, currentPlayer = null, onSelectDa
 
   // Arena data is in localStorage; HomeScreen remounts on every return home.
   const host = useMemo(() => (firstDance ? getHostForDance(firstDance.id) : null), [firstDance])
-  const top3 = useMemo(() => (firstDance ? getLeaderboard(firstDance.id, 3) : []), [firstDance])
+  const leader = useMemo(() => (firstDance ? getLeaderboard(firstDance.id, 1)[0] ?? null : null), [firstDance])
+  const progress = useMemo(
+    () => (firstDance && currentPlayer ? getPlayerProgress(firstDance.id, currentPlayer.name) : null),
+    [firstDance, currentPlayer],
+  )
   const manifestHost = firstDance && 'hostName' in firstDance && typeof firstDance.hostName === 'string'
     ? firstDance.hostName
     : null
   const hostName = host?.name ?? manifestHost
-  const target = host ?? (top3[0] ? { name: top3[0].name, score: top3[0].score } : null)
-  const targetIsHost = !!host
+  const isMe = (name: string) => !!currentPlayer && isSamePlayer(name, currentPlayer.name)
+  // Someone else's score as a reference point: the host's, else the top score.
+  const benchmark = host && !isMe(host.name)
+    ? { label: 'Host’s score', name: host.name, score: host.score }
+    : leader && !isMe(leader.name)
+      ? { label: 'Top score', name: leader.name, score: leader.score }
+      : null
+  const delta = progress && progress.previous !== null
+    ? Math.round(progress.last * 100) - Math.round(progress.previous * 100)
+    : null
 
   const hasDance = !!firstDance
   const poseDataUrl = firstDance?.poseDataUrl || undefined
@@ -118,16 +129,16 @@ export function Hero({ dances, loading = false, currentPlayer = null, onSelectDa
       <div className="hero-copy">
         <p className="hero-eyebrow">
           <span className="hero-eyebrow-dot" aria-hidden="true" />
-          AI dance arena · coached by Claude
+          AI Motion Arena · your own dance studio, with an AI coach
         </p>
         <h2 id="hero-title" className="hero-title">
           <span>Dance it.</span>{' '}
           <span>Get coached by Claude.</span>{' '}
-          <span className="hero-title-accent">Beat the host.</span>
+          <span className="hero-title-accent">Come back better.</span>
         </h2>
         <p className="hero-lede">
-          The host sets a score on a real routine. Copy it on your webcam, let Claude coach your
-          weak spots, then come back and take the top of the leaderboard.
+          Pick a routine and dance it on your webcam. Claude spots your weakest moves, builds a
+          drill for them, and you come back for another run.
         </p>
 
         <div className="hero-ctas">
@@ -139,7 +150,7 @@ export function Hero({ dances, loading = false, currentPlayer = null, onSelectDa
           {hasDance && (
             <button className="hero-cta hero-cta-primary" onClick={() => onSelectDance(firstDance)}>
               <Icon name="play" />
-              Start the challenge
+              Start dancing
             </button>
           )}
           {hasDance && onPracticeDance && (
@@ -165,7 +176,6 @@ export function Hero({ dances, loading = false, currentPlayer = null, onSelectDa
 
         {currentPlayer ? (
           <span className={`home-player-chip ${currentPlayer.isHost ? 'home-player-chip-host' : ''}`.trim()}>
-            {currentPlayer.isHost && <CrownIcon size={14} />}
             <span>Dancing as</span>
             <strong>{currentPlayer.name}</strong>
             {currentPlayer.isHost && <span className="home-player-chip-tag">Host</span>}
@@ -213,62 +223,68 @@ export function Hero({ dances, loading = false, currentPlayer = null, onSelectDa
                 size={hostSize}
                 paused={reducedMotion}
               />
-              <span className="hero-dancer-tag hero-dancer-tag-host">
-                <CrownIcon size={11} />
-                {hostName ?? 'The host'}
-              </span>
+              <span className="hero-dancer-tag hero-dancer-tag-host">{hostName ?? 'The host'}</span>
             </div>
           </div>
         </div>
 
         <div className="hero-board">
           <div className="hero-board-target">
-            <span className="hero-board-label">Score to beat</span>
-            {target ? (
+            <span className="hero-board-label">Your best</span>
+            {progress ? (
               <>
                 <span className="hero-board-score">
-                  {Math.round(target.score * 100)}
+                  {Math.round(progress.best * 100)}
                   <small>%</small>
                 </span>
                 <span className="hero-board-holder">
-                  {targetIsHost && <CrownIcon size={12} />}
-                  <span className="hero-board-holder-name">{target.name}</span>
-                  <span className="hero-board-holder-role">{targetIsHost ? 'host' : 'leader'}</span>
+                  {delta === null ? (
+                    'First run in. Go again!'
+                  ) : (
+                    <>
+                      <span className={`hero-board-delta ${delta > 0 ? 'hero-board-delta-up' : delta < 0 ? 'hero-board-delta-down' : ''}`.trim()}>
+                        {delta > 0 ? `+${delta}` : delta < 0 ? `−${-delta}` : '±0'}
+                      </span>
+                      <span>since your previous run</span>
+                    </>
+                  )}
                 </span>
               </>
             ) : (
               <>
                 <span className="hero-board-score hero-board-score-empty">--</span>
                 <span className="hero-board-holder">
-                  {hasDance ? 'No run yet: set the bar' : 'Add a dance to open the arena'}
+                  {hasDance ? 'Your first run sets the baseline' : 'Add a dance to get started'}
                 </span>
               </>
             )}
           </div>
           <div className="hero-board-top">
-            <span className="hero-board-label">Top 3</span>
-            {top3.length > 0 ? (
-              <ol className="hero-board-list">
-                {top3.map((entry, i) => {
-                  const isMe = !!currentPlayer && isSamePlayer(entry.name, currentPlayer.name)
-                  return (
-                    <li
-                      key={`${entry.name.toLowerCase()}-${i}`}
-                      className={`hero-board-row ${isMe ? 'hero-board-row-me' : ''}`.trim()}
-                    >
-                      <span className={`hero-board-pos hero-board-pos-${i + 1}`}>{i + 1}</span>
-                      <span className="hero-board-name">
-                        <span className="hero-board-name-text">{entry.name}</span>
-                        {entry.isHost && <CrownIcon size={11} label="Host" />}
+            <span className="hero-board-label">Benchmarks</span>
+            {progress || benchmark ? (
+              <ul className="hero-board-list">
+                {progress && (
+                  <li className="hero-board-row hero-board-row-me">
+                    <span className="hero-board-name">
+                      <span className="hero-board-name-text">Your last run</span>
+                    </span>
+                    <span className="hero-board-pct">{Math.round(progress.last * 100)}%</span>
+                  </li>
+                )}
+                {benchmark && (
+                  <li className="hero-board-row">
+                    <span className="hero-board-name">
+                      <span className="hero-board-name-text">
+                        {benchmark.label} · <span className="hero-board-holder-name">{benchmark.name}</span>
                       </span>
-                      <span className="hero-board-pct">{Math.round(entry.score * 100)}%</span>
-                    </li>
-                  )
-                })}
-              </ol>
+                    </span>
+                    <span className="hero-board-pct">{Math.round(benchmark.score * 100)}%</span>
+                  </li>
+                )}
+              </ul>
             ) : (
               <p className="hero-board-empty">
-                {hasDance ? 'Empty board. The first run claims #1.' : 'Scores show up here.'}
+                {hasDance ? 'Scores show up here after your first run.' : 'Scores show up here.'}
               </p>
             )}
           </div>

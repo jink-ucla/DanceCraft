@@ -6,6 +6,9 @@
 
 ## DanceCraft (2026-10-15)
 
+### Landing page trial (2026-10-16, branch `landing-page-studio`, not merged)
+- Hero reframed from "beat the host" to practice and progress while keeping the AI Motion Arena name; "Your best" + change since previous run, host's score as a benchmark. Unit + coach e2e tests pass. Next: decide whether to merge, and whether to also soften the host crown art, dance cards, and results battle panel.
+
 ### Setup fixes (2026-10-16)
 - Node is pinned to 20/22/24 (`engines` + `engine-strict` + `.nvmrc` 22) because `better-sqlite3` 12.8 does not install on Node 26. `scripts/requirements.txt` now lists mediapipe (not tensorflow). README has macOS/Linux setup steps. Verified on macOS with Node 22 and Python 3.11: install, 531 unit tests, build, dev servers. Next: upgrading to `better-sqlite3` 13 (Node >=22) could allow Node 26; `npm audit` reports 23 vulnerabilities.
 

@@ -273,7 +273,7 @@ test.describe('DanceCraft coach + arena', () => {
     expect(counters.battle).toBe(1)
   })
 
-  test('home: DanceCraft header, buddy character, score to beat', async ({ page }) => {
+  test('home: DanceCraft header, buddy character, progress + host benchmark', async ({ page }) => {
     await page.addInitScript(() => {
       const attempt = {
         overallScore: 0.78,
@@ -297,15 +297,18 @@ test.describe('DanceCraft coach + arena', () => {
     await expect(buddy.locator('canvas')).toBeVisible()
     await expect(page.locator('.home-player-chip')).toContainText('Leo')
 
-    // Hero: CTAs on the first ready dance + the host's score to beat
+    // Hero: CTAs on the first ready dance; Leo has no runs yet, the host's score is a benchmark
     const hero = page.locator('.hero')
-    await expect(hero.locator('.hero-title')).toContainText('Beat the host.')
-    const start = hero.getByRole('button', { name: 'Start the challenge' })
+    await expect(hero.locator('.hero-title')).toContainText('Come back better.')
+    const start = hero.getByRole('button', { name: 'Start dancing' })
     await expect(start).toBeVisible()
     await expect(hero.getByRole('button', { name: 'Practice' })).toBeVisible()
     await expect(hero.getByRole('button', { name: '+ Add Dance' })).toBeVisible()
-    await expect(hero.locator('.hero-board-score')).toContainText('78')
-    await expect(hero.locator('.hero-board-holder-name')).toHaveText('Wasil')
+    await expect(hero.locator('.hero-board-score')).toHaveText('--')
+    await expect(hero.locator('.hero-board-target')).toContainText('Your first run sets the baseline')
+    const benchmark = hero.locator('.hero-board-row', { hasText: 'Host’s score' })
+    await expect(benchmark.locator('.hero-board-holder-name')).toHaveText('Wasil')
+    await expect(benchmark.locator('.hero-board-pct')).toHaveText('78%')
 
     const card = page.locator('.dance-card', { hasText: 'Beat Wasil' })
     await expect(card).toBeVisible()
@@ -314,12 +317,42 @@ test.describe('DanceCraft coach + arena', () => {
 
     await page.screenshot({ path: 'tests/e2e/screenshots/dancecraft-home.png' })
 
-    // "Start the challenge" opens the player/difficulty modal for the hero's dance
+    // "Start dancing" opens the player/difficulty modal for the hero's dance
     await start.click()
     const modal = page.locator('.difficulty-modal')
     await expect(modal).toBeVisible()
     await expect(modal.locator('.difficulty-title')).toHaveText('Beat Wasil')
     await modal.locator('.difficulty-cancel').click()
     await expect(modal).toHaveCount(0)
+  })
+
+  test('home: returning player sees their best, change since previous run, and last run', async ({ page }) => {
+    await page.addInitScript(() => {
+      const attempt = (overallScore: number) => ({
+        overallScore,
+        rank: 'A',
+        sectionScores: [{ startTime: 0, endTime: 10, score: overallScore }],
+        bodyPartScores: [{ name: 'Arms', score: overallScore }],
+      })
+      // Newest first: Leo improved from 55% to 63%; the host set 78%.
+      localStorage.setItem('dancecraft_arena_entries', JSON.stringify([
+        { danceId: 'api-1', player: 'Leo', score: 0.63, rank: 'A', date: '2026-10-16T18:10:00.000Z', isHost: false, attempt: attempt(0.63) },
+        { danceId: 'api-1', player: 'Leo', score: 0.55, rank: 'A', date: '2026-10-16T18:00:00.000Z', isHost: false, attempt: attempt(0.55) },
+        { danceId: 'api-1', player: 'Wasil', score: 0.78, rank: 'S', date: '2026-10-15T18:00:00.000Z', isHost: true, attempt: attempt(0.78) },
+      ]))
+      localStorage.setItem('dancecraft_current_player', JSON.stringify({ name: 'Leo', isHost: false }))
+    })
+    await mockBackend(page)
+
+    await page.goto('/')
+
+    const hero = page.locator('.hero')
+    await expect(hero.locator('.hero-board-score')).toContainText('63')
+    await expect(hero.locator('.hero-board-delta')).toHaveText('+8')
+    await expect(hero.locator('.hero-board-target')).toContainText('since your previous run')
+    await expect(hero.locator('.hero-board-row-me .hero-board-pct')).toHaveText('63%')
+    await expect(hero.locator('.hero-board-row', { hasText: 'Host’s score' }).locator('.hero-board-pct')).toHaveText('78%')
+
+    await page.screenshot({ path: 'tests/e2e/screenshots/dancecraft-home-progress.png' })
   })
 })

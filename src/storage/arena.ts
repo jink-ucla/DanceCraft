@@ -213,6 +213,33 @@ export function getLeaderboard(danceId: string, limit = 10): LeaderboardEntry[] 
     }))
 }
 
+export interface PlayerProgress {
+  /** Number of recorded runs */
+  runs: number
+  /** 0-1 */
+  best: number
+  /** 0-1, most recent run */
+  last: number
+  /** 0-1, the run before the most recent one (null after a single run) */
+  previous: number | null
+}
+
+/** `player`'s runs on `danceId` ("Your best" on the home screen), or null if they have none. */
+export function getPlayerProgress(danceId: string, player: string): PlayerProgress | null {
+  const name = resolvePlayerName(player)
+  // Entries are stored newest first.
+  const scores = getArenaEntries()
+    .filter((e) => e.danceId === danceId && isSamePlayer(e.player, name))
+    .map((e) => clamp01(e.score))
+  if (scores.length === 0) return null
+  return {
+    runs: scores.length,
+    best: Math.max(...scores),
+    last: scores[0],
+    previous: scores.length > 1 ? scores[1] : null,
+  }
+}
+
 /** The host's best attempt on a dance ("Score to beat"), or null if no host has danced it. */
 export function getHostForDance(danceId: string): { name: string; score: number } | null {
   let top: ArenaEntry | null = null

@@ -468,6 +468,21 @@
   color: #d9b44a;
 }
 
+.hero-board-delta {
+  flex-shrink: 0;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-heading);
+}
+
+.hero-board-delta-up {
+  color: var(--accent);
+}
+
+.hero-board-delta-down {
+  color: #ff8a7a;
+}
+
 .hero-board-score {
   font-size: 32px;
   font-weight: 800;
@@ -528,24 +543,6 @@
   font-size: 13px;
   line-height: 1.35;
 }
-
-.hero-board-pos {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--bg-deep);
-  background: var(--border-hover);
-  border-radius: 50%;
-}
-
-.hero-board-pos-1 { background: var(--yellow); }
-.hero-board-pos-2 { background: #c7cdd8; }
-.hero-board-pos-3 { background: #d08a4e; }
 
 .hero-board-name {
   display: flex;
